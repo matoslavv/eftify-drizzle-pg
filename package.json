@@ -1,5 +1,5 @@
 {
-  "name": "eftify-pg-drizzle",
+  "name": "eftify-drizzle-pg",
   "version": "0.0.1",
   "description": "Package that aims to bring basic EF-like queries to Drizzle ORM",
   "main": "./lib/index.js",
@@ -16,7 +16,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/brunolau/eftify-pg-drizzle.git"
+    "url": "git+https://github.com/brunolau/eftify-drizzle-pg.git"
   },
   "license": "MIT",
   "author": {
@@ -29,9 +29,9 @@
   },
   "keywords": [],
   "bugs": {
-    "url": "https://github.com/brunolau/eftify-pg-drizzle/issues"
+    "url": "https://github.com/brunolau/eftify-drizzle-pg/issues"
   },
-  "homepage": "github.com/brunolau/eftify-pg-drizzle",
+  "homepage": "github.com/brunolau/eftify-drizzle-pg",
   "devDependencies": {
     "drizzle-orm": "0.33.0",
     "typescript": "^5.3.3"

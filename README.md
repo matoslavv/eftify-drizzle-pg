@@ -4,9 +4,6 @@
 [![Build Status][build-img]][build-url]
 [![Downloads][downloads-img]][downloads-url]
 [![Issues][issues-img]][issues-url]
-[![Code Coverage][codecov-img]][codecov-url]
-[![Commitizen Friendly][commitizen-img]][commitizen-url]
-[![Semantic Release][semantic-release-img]][semantic-release-url]
 
 > EF Core-like queries using Drizzle ORM
 
@@ -16,35 +13,107 @@
 npm install eftify-drizzle-pg
 ```
 
+## About the library
+Small library attempting to bring other relational syntax do Drizzle ORM. Might help anyone transitioning from EF Core who does not like the drizzle query API. As for now supports only Postgres database with limited functionality available. No guarantee given whatsover, use at your own risk.
+
 ## Usage
 
 ```ts
 import { drizzleEftify } from 'eftify-drizzle-pg';
+import * as schema from '../schema/schema';
 
-myPackage('hello');
-//=> 'hello from my package'
+const queryConnection = postgres(getDbUrl());
+const drizzleEftified = drizzleEftify(queryConnection, {
+	logger: appConfig.database.logQuery,
+	schema: schema
+});
+
+(async () => {
+    const dbContext = drizzleEftified.eftify;
+
+    //Queries list
+    const result = await dbContext.users.where(p => lt(p.id, 3)).select(p => ({
+        id: p.id,
+        street: p.userAddress.address,    //Navigation properties in similar manner like in EF
+        posts: p.posts.select(p => ({     //Basic One-to-many collection support
+            id: p.id,
+            text: p.content
+        })).toList('posty')               //Due to limitations requires name specification
+    })).toList();
+
+    //Simple sum
+    const summary = await dbContext.users.where(p => and(
+        lt(p.id, 2),
+        ne(p.id, 0)
+    )).sum(p => p.id);
+
+    //Count query
+    const userCount = await dbContext.users.where(p => and(
+        lt(p.id, 2),
+        ne(p.id, 0)
+    )).count();
+})();
+
+
+
+
+
 ```
 
-## API
+## Sample schema
 
-### myPackage(input, options?)
+```ts
+import { relations } from 'drizzle-orm';
+import { integer, pgTable, text } from 'drizzle-orm/pg-core';
 
-#### input
+// ==================== USERS ====================
+export const users = pgTable('users', {
+	id: integer('id').primaryKey(),
+	name: text('name'),
+});
 
-Type: `string`
+export const usersRelations = relations(users, ({ one, many }) => ({
+	userAddress: one(userAddress, {
+		fields: [users.id],
+		references: [userAddress.userId],
+	}),
+	posts: many(posts),
+}));
 
-Lorem ipsum.
+// ==================== USER ADDRESS ====================
+export const userAddress = pgTable('userAddress', {
+	id: integer('id').primaryKey(),
+	userId: integer('sender_user_id').references(() => users.id),
+	address: text('address'),
+});
 
-#### options
+export const userAddressRelations = relations(userAddress, ({ one }) => ({
+	user: one(users),
+}));
 
-Type: `object`
 
-##### postfix
+// ==================== POST ====================
+export const posts = pgTable('posts', {
+	id: integer('id').primaryKey(),
+	content: text('content'),
+	authorId: integer('author_id'),
+});
+export const postsRelations = relations(posts, ({ one }) => ({
+	author: one(users, {
+		fields: [posts.authorId],
+		references: [users.id],
+	}),
+}));
 
-Type: `string`
-Default: `rainbows`
 
-Lorem ipsum.
+// ============ UNRELATED TABLE =================
+export const unrelatedTable = pgTable('unrelatedTable', {
+	id: integer('id').primaryKey(),
+	sometext: text('sometext'),
+});
+```
+
+
 
 [build-img]:https://github.com/brunolau/eftify-drizzle-pg/actions/workflows/release.yml/badge.svg
 [build-url]:https://github.com/brunolau/eftify-drizzle-pg/actions/workflows/release.yml
@@ -54,9 +123,3 @@ Lorem ipsum.
 [npm-url]:https://www.npmjs.com/package/eftify-drizzle-pg
 [issues-img]:https://img.shields.io/github/issues/brunolau/eftify-drizzle-pg
 [issues-url]:https://github.com/brunolau/eftify-drizzle-pg/issues
-[codecov-img]:https://codecov.io/gh/brunolau/eftify-drizzle-pg/branch/main/graph/badge.svg
-[codecov-url]:https://codecov.io/gh/brunolau/eftify-drizzle-pg
-[semantic-release-img]:https://img.shields.io/badge/%20%20%F0%9F%93%A6%F0%9F%9A%80-semantic--release-e10079.svg
-[semantic-release-url]:https://github.com/semantic-release/semantic-release
-[commitizen-img]:https://img.shields.io/badge/commitizen-friendly-brightgreen.svg
-[commitizen-url]:http://commitizen.github.io/cz-cli/
