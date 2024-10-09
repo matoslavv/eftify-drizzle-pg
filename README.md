@@ -16,6 +16,8 @@ npm install eftify-drizzle-pg
 ## About the library
 Small library attempting to bring other relational syntax do Drizzle ORM. Might help anyone transitioning from EF Core who does not like the drizzle query API. As for now supports only Postgres database with limited functionality available. No guarantee given whatsover, use at your own risk.
 
+Library can run alongside standard drizzle. All it does is create new "eftify" property on the root drizzle object with new API available.
+
 ## Usage
 
 ```ts
@@ -76,6 +78,33 @@ const drizzleEftified = drizzleEftify(queryConnection, {
         idSum: p.sum(p => p.id),
         street: p.key.street     //Key property holds the grouping key similar to EF Core
     })).toList();
+
+    //Insert example + transaction
+    const userRow = await dbContext.transaction(async trx => {
+        try {
+            const userRow = await trx.users.insert({
+                name: 'new user'
+            }).returning({
+                id: trx.users.getUnderlyingEntity().id
+            });
+
+            const userAddressRow = await trx.userAddress.insert({
+                userId: userRow[0].id,
+                address: 'some address'
+            });
+
+            return { id: userRow[0].id };
+        } catch (error) {
+            await trx.rollback();
+            return null;
+        }
+    });
+
+    //Update example
+    const affectedCount = await dbContext.users.where(p => eq(p.id, 1)).update({
+        name: 'changed name'
+    });
+
 })();
 
 

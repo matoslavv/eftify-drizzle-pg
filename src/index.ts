@@ -106,9 +106,8 @@ const drizzleEftifyCreateRelations = <TSchemaFull extends Record<string, unknown
     const fullSchema = drizzleDb['_'].fullSchema;
     const tableNamesMap = drizzleDb['_'].tableNamesMap;
     const entityCache: { [index: string]: DbEntity<any, any> } = {};
-
-
-    const retObj: any = {};
+    const retObj: any = new DbContextImpl(drizzleDb);
+    
     for (const [tableName] of Object.entries(schema)) {
         const table = (schema as any)[tableName];
         const relations = table.relations;
@@ -197,9 +196,6 @@ const drizzleEftifyCreateRelations = <TSchemaFull extends Record<string, unknown
             }
         }
 
-
-
-
         Object.defineProperty(retObj, tableName, {
             get: () => {
                 const context = new DbContextImpl(drizzleDb);
@@ -208,7 +204,6 @@ const drizzleEftifyCreateRelations = <TSchemaFull extends Record<string, unknown
             },
         });
     }
-
 
     return retObj;
 }
