@@ -107,16 +107,10 @@ const drizzleEftifyCreateRelations = <TSchemaFull extends Record<string, unknown
     const tableNamesMap = drizzleDb['_'].tableNamesMap;
     const entityCache: { [index: string]: DbEntity<any, any> } = {};
     const retObj: any = new DbContextImpl(drizzleDb);
-    
+    const dbTsNameMap: { [index: string]: string } = {};
+
     for (const [tableName] of Object.entries(schema)) {
         const table = (schema as any)[tableName];
-        const relations = table.relations;
-
-        const columns = table.columns;
-        if (columns == null) {
-            throw 'Columns not set on the table';
-        }
-
         const schemaTable = fullSchema[tableName];
         if (schemaTable == null) {
             throw 'Base table not extracted from the schema';
@@ -131,10 +125,28 @@ const drizzleEftifyCreateRelations = <TSchemaFull extends Record<string, unknown
 
         //Put in cache
         entityCache[tableName] = InnerEntity as any;
+        dbTsNameMap[table.dbName] = table.tsName;
+    }
+
+    for (const [tableName] of Object.entries(schema)) {
+        const table = (schema as any)[tableName];
+        const relations = table.relations;
+
+        const columns = table.columns;
+        if (columns == null) {
+            throw 'Columns not set on the table';
+        }
+
+        const schemaTable = fullSchema[tableName];
+        if (schemaTable == null) {
+            throw 'Base table not extracted from the schema';
+        }
+
+        const entityClass = entityCache[tableName];
 
         //Populate it with table columns
         for (const [colName] of Object.entries(columns)) {
-            Object.defineProperty(InnerEntity.prototype, colName, {
+            Object.defineProperty((entityClass as any).prototype, colName, {
                 get() {
                     return this.table[colName];
                 },
@@ -146,7 +158,16 @@ const drizzleEftifyCreateRelations = <TSchemaFull extends Record<string, unknown
         //Build relations
         for (const [relName] of Object.entries(relations)) {
             const relation: NormalizedRelation = normalizeRelation(schema, tableNamesMap, relations[relName]);
-            const entityClass = entityCache[relations[relName].referencedTableName];
+            let tableName = relations[relName].referencedTableName;
+            if (dbTsNameMap[tableName] != null) {
+                tableName = dbTsNameMap[tableName];
+            }
+
+            const navClass = entityCache[tableName];
+            if (navClass == null) {
+                throw 'Entity class not found in the cache!';
+            }
+
             const isOneToOne = (relations[relName] as any).constructor.name == 'One';
             const relationItem: DbQueryRelationRecord = {
                 mandatory: (relations[relName] as One).isNullable != true,
@@ -154,9 +175,9 @@ const drizzleEftifyCreateRelations = <TSchemaFull extends Record<string, unknown
             };
 
             if (isOneToOne) {
-                Object.defineProperty(InnerEntity.prototype, relName, {
+                Object.defineProperty((entityClass as any).prototype, relName, {
                     get() {
-                        const retVal: any = this.getNavigationProperty(relName, true, entityClass)
+                        const retVal: any = this.getNavigationProperty(relName, true, navClass)
                         if (this._navigationCb != null) {
                             retVal.subscribeNavigation(this._navigationCb)
 
@@ -176,7 +197,7 @@ const drizzleEftifyCreateRelations = <TSchemaFull extends Record<string, unknown
                     enumerable: true,
                 });
             } else {
-                Object.defineProperty(InnerEntity.prototype, relName, {
+                Object.defineProperty((entityClass as any).prototype, relName, {
                     get() {
                         let navProp: DbCollection<any> = null as any
                         if ((this as any)['_' + relName] != null) {
@@ -184,7 +205,7 @@ const drizzleEftifyCreateRelations = <TSchemaFull extends Record<string, unknown
                         }
 
                         if (navProp == null) {
-                            navProp = new DbCollection(this.context, this, relationItem, new (entityClass as any)(this.context));
+                            navProp = new DbCollection(this.context, this, relationItem, new (navClass as any)(this.context));
                             (this as any)['_' + relName] = new WeakRef(navProp);
                         }
 
