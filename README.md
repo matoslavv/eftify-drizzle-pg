@@ -20,6 +20,7 @@ Small library attempting to bring other relational syntax do Drizzle ORM. Might 
 
 ```ts
 import { drizzleEftify } from 'eftify-drizzle-pg';
+import { and, lt, ne } from 'drizzle-orm';
 import * as schema from '../schema/schema';
 
 const queryConnection = postgres(getDbUrl());
@@ -41,6 +42,16 @@ const drizzleEftified = drizzleEftify(queryConnection, {
         })).toList('posty')               //Due to limitations requires name specification
     })).toList();
 
+    //Single result
+    const singleResult = await dbContext.users.where(p => lt(p.id, 3)).select(p => ({
+        id: p.id,
+        street: p.userAddress.address,    //Navigation properties in similar manner like in EF
+        posts: p.posts.select(p => ({     //Basic One-to-many collection support
+            id: p.id,
+            text: p.content
+        })).toList('posty')               //Due to limitations requires name specification
+    })).firstOrDefault();
+
     //Simple sum
     const summary = await dbContext.users.where(p => and(
         lt(p.id, 2),
@@ -52,6 +63,19 @@ const drizzleEftified = drizzleEftify(queryConnection, {
         lt(p.id, 2),
         ne(p.id, 0)
     )).count();
+
+    //Grouping example
+    const groupedResult = await dbContext.users.select(p => ({
+        id: p.id,
+        street: p.userAddress.address,  
+        name: p.name
+    })).groupBy(p => ({
+        street: p.street
+    })).select(p => ({
+        idCount: p.count(),
+        idSum: p.sum(p => p.id),
+        street: p.key.street     //Key property holds the grouping key similar to EF Core
+    })).toList();
 })();
 
 
