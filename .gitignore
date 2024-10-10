@@ -118,3 +118,4 @@ dist
 # Compiled code
 lib/
 package-lock.json
+.env

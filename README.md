@@ -14,9 +14,11 @@ npm install eftify-drizzle-pg
 ```
 
 ## About the library
-Small library attempting to bring other relational syntax do Drizzle ORM. Might help anyone transitioning from EF Core who does not like the drizzle query API. As for now supports only Postgres database with limited functionality available. No guarantee given whatsover, use at your own risk.
+Small library attempting to bring other relational syntax to Drizzle ORM. Might help anyone transitioning from EF Core who does not like the drizzle query API. As for now supports only Postgres database with limited functionality available. No guarantee given whatsover, use at your own risk.
 
 Library can run alongside standard drizzle. All it does is create new "eftify" property on the root drizzle object with new API available.
+
+Mainly developed for our team's needs. There is no plan to develop further than the scope of our needs, in case you're missing a feature, feel free to create a PR.
 
 ## Usage
 
@@ -41,7 +43,7 @@ const drizzleEftified = drizzleEftify(queryConnection, {
         posts: p.posts.select(p => ({     //Basic One-to-many collection support
             id: p.id,
             text: p.content
-        })).toList('posty')               //Due to limitations requires name specification
+        })).toList('posts')               //Due to limitations requires name specification
     })).toList();
 
     //Single result

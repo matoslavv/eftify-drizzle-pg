@@ -22,8 +22,7 @@ interface TableRelationalConfigSimple {
 type RelationalEntity<
     TFullSchema extends Record<string, unknown>,
     TSchema extends TableRelationalConfigSimple
-> = RelationBuilder<TFullSchema, TSchema['relations']> & TSchema['columns'];
-
+> =  RelationBuilder<TFullSchema, NonNullable<TSchema['relations']>> & TSchema['columns'];
 
 type ExtractTablesOnly<TSchema extends Record<string, unknown>> = {
     [K in keyof TSchema as TSchema[K] extends Table ? K : never]: TSchema[K] extends Table ? TSchema[K] & {

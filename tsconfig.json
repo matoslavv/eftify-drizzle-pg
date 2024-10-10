@@ -1,16 +1,25 @@
 {
   "compilerOptions": {
-    "target": "ES2018",
-    "module": "commonjs",
+    "module": "NodeNext",
     "declaration": true,
     "outDir": "./lib/",
-    "strictNullChecks": false,
-    "esModuleInterop": true,
-    "skipLibCheck": true, /* Skip type checking of declaration files. */
+    // "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true, /* Disallow inconsistently-cased references to the same file. */
     "lib": [
       "ESNext"
-    ]
+    ],
+    "target": "ES2018",
+    "strictNullChecks": false,
+    "skipLibCheck": true,
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "incremental": true,
+    "resolveJsonModule": true,
+    "allowSyntheticDefaultImports": true,
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+    "sourceMap": true,
+    "baseUrl": ".",
   },
   "include": [
     "src/**/*.ts",
