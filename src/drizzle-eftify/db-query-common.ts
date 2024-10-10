@@ -1,11 +1,9 @@
 import { AnyColumn, Column, One, OneOrMany, SQL, Table, aliasedTableColumn, and, eq, is, sql } from 'drizzle-orm'
 import { DbEntity } from './db-entity'
 import { DbQueryRelation } from './db-query-relation'
+import DbEftifyConfig from './db-eftify-config';
 
 export class DbQueryCommon {
-	static traceEnabled: boolean = false
-	static pgForAliasedColumnsReturnDateAsUTC: boolean = false
-
 	static ensureColumnAliased(
 		fields: any,
 		fixColumnNames: boolean,
@@ -20,7 +18,7 @@ export class DbQueryCommon {
 
 			if (is(field, Column)) {
 				if (field.name != name && fixColumnNames) {
-					if (!DbQueryCommon.pgForAliasedColumnsReturnDateAsUTC) {
+					if (!DbEftifyConfig.pgForAliasedColumnsReturnDateAsUTC) {
 						fields[name] = sql`${field}`.as(`${name}`)
 					} else {
 						if (field.getSQLType() != 'timestamp with time zone') {
@@ -143,13 +141,13 @@ export class DbQueryCommon {
 	}
 
 	static traceExecutionStart(label: string): void {
-		if (this.traceEnabled) {
+		if (DbEftifyConfig.traceEnabled) {
 			//console.time(label)
 		}
 	}
 
 	static traceExecutionEnd(label: string): void {
-		if (this.traceEnabled) {
+		if (DbEftifyConfig.traceEnabled) {
 			//console.timeEnd(label)
 		}
 	}

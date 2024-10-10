@@ -28,7 +28,7 @@ import { and, lt, ne } from 'drizzle-orm';
 import * as schema from '../schema/schema';
 
 const queryConnection = postgres(getDbUrl());
-const drizzleEftified = drizzleEftify(queryConnection, {
+const drizzleEftified = drizzleEftify.create(queryConnection, {
 	logger: appConfig.database.logQuery,
 	schema: schema
 });

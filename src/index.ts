@@ -6,6 +6,7 @@ import { DbEntity } from "./drizzle-eftify/db-entity";
 import { DbContext } from "./drizzle-eftify/db-context";
 import { DbCollection } from "./drizzle-eftify/db-collection";
 import { DbQueryRelationRecord } from "./drizzle-eftify/db-query-relation";
+import DbEftifyConfig from "./drizzle-eftify/db-eftify-config";
 
 
 type RelationBuilder<TSchemaFull extends Record<string, unknown>, TRelations extends Record<string, Relation>> = {
@@ -79,7 +80,7 @@ class DbContextImpl implements DbContext {
     }
 }
 
-export const drizzleEftify = <TSchemaFull extends Record<string, unknown> = Record<string, never>, TSchema = ExtractTablesOnly<TSchemaFull>>(pgClient: any, config?: DrizzleConfig<TSchemaFull>): PostgresJsDatabase<TSchemaFull> & {
+const createEftify = <TSchemaFull extends Record<string, unknown> = Record<string, never>, TSchema = ExtractTablesOnly<TSchemaFull>>(pgClient: any, config?: DrizzleConfig<TSchemaFull>): PostgresJsDatabase<TSchemaFull> & {
     eftify: {
         [K in keyof TSchema]: DbSet<
             RelationalType<TSchema, K>,
@@ -226,4 +227,9 @@ const drizzleEftifyCreateRelations = <TSchemaFull extends Record<string, unknown
     }
 
     return retObj;
+}
+
+export const drizzleEftify = {
+    create: createEftify,
+    config: DbEftifyConfig
 }
