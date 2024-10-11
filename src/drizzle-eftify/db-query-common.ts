@@ -12,7 +12,29 @@ export class DbQueryCommon {
 
 		for (let [name, field] of Object.entries(fields)) {
 			if ((field as EftifyCollectionJoinDeclaration).isCollectionDeclaration) {
-				fields[name] = (field as EftifyCollectionJoinDeclaration).sql.as((field as EftifyCollectionJoinDeclaration).columnName);
+				if (relationArr != null) {
+					relationArr.push({
+						callingEntity: null,
+						childEntity: null,
+						relation: null,
+						uniqueKey: (field as EftifyCollectionJoinDeclaration).id + (field as EftifyCollectionJoinDeclaration).columnName,
+						joinDeclaration: {
+							sql: (field as EftifyCollectionJoinDeclaration).sql,
+							isLateral: true
+						}
+					});
+
+					const baseChunks = (field as EftifyCollectionJoinDeclaration).sql.queryChunks;
+					(baseChunks as any)[0].value[0] = `(SELECT COALESCE(json_agg(${(field as EftifyCollectionJoinDeclaration).id}.*),'[]') as "${(field as EftifyCollectionJoinDeclaration).columnName}" from `;
+					(baseChunks[baseChunks.length - 1] as any).value[0] = (baseChunks[baseChunks.length - 1] as any).value[0] + ` "${(field as EftifyCollectionJoinDeclaration).id}" `;
+
+					const retQuery = sql`IDREPLACE.*`;
+					(retQuery as any).queryChunks[0].value[0] = (retQuery as any).queryChunks[0].value[0].replace('IDREPLACE', (field as EftifyCollectionJoinDeclaration).id);
+					fields[name] = retQuery.as((field as EftifyCollectionJoinDeclaration).columnName);
+				} else {
+					fields[name] = (field as EftifyCollectionJoinDeclaration).sql.as((field as EftifyCollectionJoinDeclaration).columnName);
+				}
+
 				field = fields[name];
 			}
 
@@ -124,7 +146,17 @@ export class DbQueryCommon {
 			}
 
 			try {
-				if (relationItem.relation.mandatory) {
+				if (relationItem.joinDeclaration != null) {
+					select = (select as any).leftJoin(
+						relationItem.joinDeclaration.sql,
+						true
+					) as any
+
+					if (relationItem.joinDeclaration.isLateral) {
+						const joinsArr: any[] = (select as any).config.joins;
+						joinsArr[joinsArr.length - 1].lateral = true;
+					}
+				} else if (relationItem.relation.mandatory) {
 					select = (select as any).innerJoin(
 						relationItem.childEntity.table,
 						DbQueryCommon.createJoinOn(relationItem)

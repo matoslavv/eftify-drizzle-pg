@@ -54,8 +54,6 @@ export class DbCollectionQueryable<TSelection extends SelectedFields<any, any>> 
 
 		const retQuery = sql<SelectResult<TSelection, 'multiple', any>[]>`(SELECT COALESCE(json_agg(IDREPLACE.*),'[]') from ${subq})`;
 		(retQuery as any).queryChunks[0].value[0] = (retQuery as any).queryChunks[0].value[0].replace('IDREPLACE', id);
-		//return xx.as(columnName) as any
-
 
 		const joinDeclaration: EftifyCollectionJoinDeclaration = {
 			columnName: columnName,
@@ -65,12 +63,6 @@ export class DbCollectionQueryable<TSelection extends SelectedFields<any, any>> 
 		}
 
 		return joinDeclaration as any;
-
-		//const tst = sqll<SelectResult<TSelection, 'multiple', any>[]>`(SELECT COALESCE(json_agg(${id}.*),'[]') from ${subq})`
-
-		//	return sql<SelectResult<TSelection, 'multiple', any>[]>(builder as any, paramArr);
-
-		//return sql<SelectResult<TSelection, 'multiple', any>[]>`(SELECT COALESCE(json_agg(${id}.*),'[]') from ${subq})`
 	}
 
 	toNumberList(): SQL<number[]> {
