@@ -87,7 +87,7 @@ export class DbSet<TDataModel extends any, TTable extends AnyPgTable, TEntity ex
 		})
 
 		const columns = callbackfn(this._entity)
-		DbQueryCommon.ensureColumnAliased(columns, false)
+		DbQueryCommon.ensureColumnAliased(columns, false, relationArr)
 		this._entity.unsubscribeNavigation()
 		let select = this.createQuery(columns)
 

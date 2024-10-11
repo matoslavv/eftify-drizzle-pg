@@ -4,6 +4,7 @@ import { DbQueryCommon } from '../db-query-common'
 import { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import { AnyPgColumn } from 'drizzle-orm/pg-core'
 import { SelectResult } from 'drizzle-orm/query-builders/select.types'
+import { EftifyCollectionJoinDeclaration } from '../data-contracts'
 
 let counter = 0
 
@@ -36,7 +37,7 @@ export class DbCollectionQueryable<TSelection extends SelectedFields<any, any>> 
 	select<TResult extends SelectedFields<any, any>>(selector: (value: TSelection) => TResult) {
 		const subquery = this.buildSubquery()
 		const columns = selector(subquery)
-		DbQueryCommon.ensureColumnAliased(columns, true)
+		DbQueryCommon.ensureColumnAliased(columns, true, null)
 		let select = this._db.select(columns).from(subquery)
 
 		return new DbCollectionQueryable(this._db, select, this._level + 1)
@@ -51,14 +52,20 @@ export class DbCollectionQueryable<TSelection extends SelectedFields<any, any>> 
 			columnName = 'list' + seq
 		}
 
-		const xx = sql<
-			SelectResult<TSelection, 'multiple', any>[]
-		>`(SELECT COALESCE(json_agg(IDREPLACE.*),'[]') from ${subq})`
-		;(xx as any).queryChunks[0].value[0] = (xx as any).queryChunks[0].value[0].replace(
-			'IDREPLACE',
-			id
-		)
-		return xx.as(columnName) as any
+		const retQuery = sql<SelectResult<TSelection, 'multiple', any>[]>`(SELECT COALESCE(json_agg(IDREPLACE.*),'[]') from ${subq})`;
+		(retQuery as any).queryChunks[0].value[0] = (retQuery as any).queryChunks[0].value[0].replace('IDREPLACE', id);
+		//return xx.as(columnName) as any
+
+
+		const joinDeclaration: EftifyCollectionJoinDeclaration = {
+			columnName: columnName,
+			isCollectionDeclaration: true,
+			sql: retQuery,
+			id: id,
+		}
+
+		return joinDeclaration as any;
+
 		//const tst = sqll<SelectResult<TSelection, 'multiple', any>[]>`(SELECT COALESCE(json_agg(${id}.*),'[]') from ${subq})`
 
 		//	return sql<SelectResult<TSelection, 'multiple', any>[]>(builder as any, paramArr);

@@ -84,7 +84,7 @@ export class DbCollection<TEntity extends DbEntity<any, AnyPgTable>> {
 		})
 
 		const columns = callbackfn(this._entity)
-		DbQueryCommon.ensureColumnAliased(columns, true)
+		DbQueryCommon.ensureColumnAliased(columns, true, relationArr)
 		this._entity.unsubscribeNavigation()
 
 		let select = this.createQuery(columns)

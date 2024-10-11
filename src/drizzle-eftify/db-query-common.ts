@@ -2,16 +2,20 @@ import { AnyColumn, Column, One, OneOrMany, SQL, Table, aliasedTableColumn, and,
 import { DbEntity } from './db-entity'
 import { DbQueryRelation } from './db-query-relation'
 import DbEftifyConfig from './db-eftify-config';
+import { EftifyCollectionJoinDeclaration } from './data-contracts';
 
 export class DbQueryCommon {
-	static ensureColumnAliased(
-		fields: any,
-		fixColumnNames: boolean,
-		opData?: { count: number; names: { [index: string]: boolean } }
-	) {
+	static ensureColumnAliased(fields: any, fixColumnNames: boolean, relationArr: DbQueryRelation[], opData?: { count: number; names: { [index: string]: boolean } }) {
 		opData = opData || { count: 0, names: {} }
 
-		for (const [name, field] of Object.entries(fields)) {
+
+
+		for (let [name, field] of Object.entries(fields)) {
+			if ((field as EftifyCollectionJoinDeclaration).isCollectionDeclaration) {
+				fields[name] = (field as EftifyCollectionJoinDeclaration).sql.as((field as EftifyCollectionJoinDeclaration).columnName);
+				field = fields[name];
+			}
+
 			if (typeof name !== 'string' || is(field, SQL) || is(field, SQL.Aliased)) {
 				continue
 			}
@@ -37,18 +41,19 @@ export class DbQueryCommon {
 					objBuilder[fieldName] = (field as any)[fieldName]
 				}
 
-				DbQueryCommon.ensureColumnAliased(objBuilder, fixColumnNames, opData)
+				DbQueryCommon.ensureColumnAliased(objBuilder, fixColumnNames, relationArr, opData)
 				fields[name] = objBuilder
 			} else if (is(field, Table)) {
 				DbQueryCommon.ensureColumnAliased(
 					(field as any)[(Table as any).Symbol.Columns],
 					fixColumnNames,
+					relationArr,
 					opData
 				)
 			} else if (!field) {
 				delete fields[name]
 			} else {
-				DbQueryCommon.ensureColumnAliased(field, fixColumnNames, opData)
+				DbQueryCommon.ensureColumnAliased(field, fixColumnNames, relationArr, opData)
 			}
 		}
 	}

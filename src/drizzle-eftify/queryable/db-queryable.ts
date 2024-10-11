@@ -49,28 +49,28 @@ export class DbQueryable<TSelection extends SelectedFields<any, any>> {
 	): DbQueryable<TResult> {
 		const subquery = this.buildSubquery()
 		const columns = selector(subquery)
-		DbQueryCommon.ensureColumnAliased(columns, false)
+		DbQueryCommon.ensureColumnAliased(columns, false, null)
 		let select = this._db.select(columns).from(subquery)
 
 		return new DbQueryable(this._db, select, this._level + 1)
 	}
 
 	groupBy<TResult extends SelectedFields<any, any>>(selector: (value: TSelection) => TResult) {
-        const subquery = this.buildSubquery();
-        const groupColumns = selector(subquery);
-        DbQueryCommon.ensureColumnAliased(groupColumns, false);
-        type SelectedType = ReturnType<typeof this.createSelect<typeof groupColumns>>;
-        type BaseType = TSelection;
+		const subquery = this.buildSubquery();
+		const groupColumns = selector(subquery);
+		DbQueryCommon.ensureColumnAliased(groupColumns, false, null);
+		type SelectedType = ReturnType<typeof this.createSelect<typeof groupColumns>>;
+		type BaseType = TSelection;
 
-        return new GroupedDbQueryable<BaseType, SelectedType, SelectedType>(
-            this._db,
-            (null as any) as SelectedType,
-            (this._baseQuery as any) as BaseType,
-            this._level + 1,
-            (groupColumns as any) as SelectedType,
-            subquery
-        )
-    }
+		return new GroupedDbQueryable<BaseType, SelectedType, SelectedType>(
+			this._db,
+			(null as any) as SelectedType,
+			(this._baseQuery as any) as BaseType,
+			this._level + 1,
+			(groupColumns as any) as SelectedType,
+			subquery
+		)
+	}
 
 
 	async firstOrDefault(): Promise<SelectResult<TSelection, 'multiple', any>> {
