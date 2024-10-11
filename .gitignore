@@ -1,3 +1,5 @@
+.env
+
 # Logs
 logs
 *.log
@@ -118,4 +120,4 @@ dist
 # Compiled code
 lib/
 package-lock.json
-.env
+
