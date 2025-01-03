@@ -46,6 +46,12 @@ const drizzleEftified = drizzleEftify.create(queryConnection, {
         })).toList('posts')               //Due to limitations requires name specification
     })).toList();
 
+    //Obtaining author name from post (possibly fixed in 0.0.5)
+    const otherWay = dbContext.posts.where(p => eq(p.authorId, 3)).select(p => ({
+        id: p.id,
+        authorId: p.author.name
+    })).firstOrDefault();
+
     //Single result
     const singleResult = await dbContext.users.where(p => lt(p.id, 3)).select(p => ({
         id: p.id,

@@ -9,11 +9,14 @@ import { DbQueryRelationRecord } from "./drizzle-eftify/db-query-relation";
 import DbEftifyConfig from "./drizzle-eftify/db-eftify-config";
 
 
-type RelationBuilder<TSchemaFull extends Record<string, unknown>, TRelations extends Record<string, Relation>> = {
-    [P in keyof TRelations]: P extends keyof TSchemaFull
-    ? TRelations[P] extends One<any> ? DbEntityType<TSchemaFull, P> & RelationalType<TSchemaFull, P> : DbCollection<DbEntityType<TSchemaFull, P> & RelationalType<TSchemaFull, P>>
-    : never;
-};
+type RelationBuilder<TSchemaFull extends
+    Record<string, unknown>,
+    TRelations extends Record<string, Relation>> = {
+        [P in keyof TRelations]: P extends keyof TSchemaFull
+        ? TRelations[P] extends One<any> ? DbEntityType<TSchemaFull, P> & RelationalType<TSchemaFull, P> : DbCollection<DbEntityType<TSchemaFull, P> & RelationalType<TSchemaFull, P>>
+        : TRelations[P] extends One<any> ? DbEntityType<TSchemaFull, TRelations[P]['referencedTableName']> & RelationalType<TSchemaFull, TRelations[P]['referencedTableName']>
+        : DbCollection<DbEntityType<TSchemaFull, TRelations[P]['referencedTableName']> & RelationalType<TSchemaFull, TRelations[P]['referencedTableName']>>;
+    };
 
 interface TableRelationalConfigSimple {
     columns?: Record<string, Column>;
@@ -23,7 +26,7 @@ interface TableRelationalConfigSimple {
 type RelationalEntity<
     TFullSchema extends Record<string, unknown>,
     TSchema extends TableRelationalConfigSimple
-> =  RelationBuilder<TFullSchema, NonNullable<TSchema['relations']>> & TSchema['columns'];
+> = RelationBuilder<TFullSchema, NonNullable<TSchema['relations']>> & TSchema['columns'];
 
 type ExtractTablesOnly<TSchema extends Record<string, unknown>> = {
     [K in keyof TSchema as TSchema[K] extends Table ? K : never]: TSchema[K] extends Table ? TSchema[K] & {

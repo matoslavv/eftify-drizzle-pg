@@ -38,14 +38,10 @@ const drizzleEftified = drizzleEftify.create(queryConnection, {
             })).toList('posts')               //Due to limitations requires name specification
         })).toList();
 
-        //Single result
-        const singleResult = await dbContext.users.where(p => lt(p.id, 3)).select(p => ({
+        //Obtaining author name from post (possibly fixed in 0.0.5)
+        const otherWay = dbContext.posts.where(p => eq(p.authorId, 3)).select(p => ({
             id: p.id,
-            street: p.userAddress.address,    //Navigation properties in similar manner like in EF
-            posts: p.posts.select(p => ({     //Basic One-to-many collection support
-                id: p.id,
-                text: p.content
-            })).toList('posty')               //Due to limitations requires name specification
+            authorId: p.author.name
         })).firstOrDefault();
 
         //Simple sum
