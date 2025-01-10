@@ -59,7 +59,8 @@ export class DbQueryCommon {
 				}
 			} else if (field instanceof DbEntity) {
 				const table = field.constructor.prototype.table;
-				const tableColumnNames = Object.values(getTableColumns(table))?.map((p: any) => p.name) || [];
+				const columns = table[Symbol.for('drizzle:Columns')];
+				const tableColumnNames = Object.keys(columns) || [];
 				const objBuilder: any = {};
 				for (const fieldName of tableColumnNames) {
 					objBuilder[fieldName] = field[fieldName as keyof typeof field];
