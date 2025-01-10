@@ -29,6 +29,12 @@ const drizzleEftified = drizzleEftify.create(queryConnection, {
         const dbContext = drizzleEftified.eftify;
 
         //Queries list
+        const userList = await dbContext.users.where(p => lt(p.id, 90)).select(p => ({
+            id: p.id,
+            address: p.userAddress
+        })).toList();
+
+        //Queries list
         const result = await dbContext.users.where(p => lt(p.id, 90)).select(p => ({
             id: p.id,
             street: p.userAddress.address,    //Navigation properties in similar manner like in EF
