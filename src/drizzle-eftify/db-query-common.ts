@@ -1,4 +1,4 @@
-import { AnyColumn, Column, One, OneOrMany, SQL, Table, aliasedTableColumn, and, eq, is, sql } from 'drizzle-orm'
+import { AnyColumn, Column, One, OneOrMany, SQL, Table, aliasedTableColumn, and, eq, getTableColumns, is, sql } from 'drizzle-orm'
 import { DbEntity } from './db-entity'
 import { DbQueryRelation } from './db-query-relation'
 import DbEftifyConfig from './db-eftify-config';
@@ -58,9 +58,11 @@ export class DbQueryCommon {
 					}
 				}
 			} else if (field instanceof DbEntity) {
-				const objBuilder: any = {}
-				for (const fieldName of field.constructor.prototype.$columns) {
-					objBuilder[fieldName] = (field as any)[fieldName]
+				const table = field.constructor.prototype.table;
+				const tableColumnNames = Object.values(getTableColumns(table))?.map((p: any) => p.name) || [];
+				const objBuilder: any = {};
+				for (const fieldName of tableColumnNames) {
+					objBuilder[fieldName] = field[fieldName as keyof typeof field];
 				}
 
 				DbQueryCommon.ensureColumnAliased(objBuilder, fixColumnNames, relationArr, opData)
