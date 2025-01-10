@@ -219,6 +219,8 @@ const drizzleEftifyCreateRelations = <TSchemaFull extends Record<string, unknown
                     enumerable: true,
                 });
             }
+
+            ((entityClass as any).prototype.$navProps || (((entityClass as any).prototype.$navProps = []) as any)).push(relName)
         }
 
         Object.defineProperty(retObj, tableName, {
