@@ -171,6 +171,7 @@ const drizzleEftifyCreateRelations = <TSchemaFull extends Record<string, unknown
                 throw 'Entity class not found in the cache!';
             }
 
+            const uniqueKey = relName + tableName;
             const isOneToOne = (relations[relName] as any).constructor.name == 'One';
             const relationItem: DbQueryRelationRecord = {
                 mandatory: (relations[relName] as One).isNullable != true,
@@ -188,7 +189,7 @@ const drizzleEftifyCreateRelations = <TSchemaFull extends Record<string, unknown
                                 navigation: {
                                     callingEntity: this,
                                     childEntity: retVal,
-                                    uniqueKey: relName + tableName,
+                                    uniqueKey: uniqueKey,
                                     relation: relationItem
                                 }
                             })
@@ -208,7 +209,7 @@ const drizzleEftifyCreateRelations = <TSchemaFull extends Record<string, unknown
                         }
 
                         if (navProp == null) {
-                            navProp = new DbCollection(this.context, this, relationItem, new (navClass as any)(this.context));
+                            navProp = new DbCollection(this.context, this, relationItem, new (navClass as any)(this.context), uniqueKey);
                             (this as any)['_' + relName] = new WeakRef(navProp);
                         }
 

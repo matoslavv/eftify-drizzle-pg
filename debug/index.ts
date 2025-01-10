@@ -38,6 +38,15 @@ const drizzleEftified = drizzleEftify.create(queryConnection, {
             })).toList('posts')               //Due to limitations requires name specification
         })).toList();
 
+        //Navigating through 2 levels of entities obtaining collection (fixed in 0.0.7)
+        const nestedResults = await dbContext.userAddress.select(p => ({
+            id: p.id,
+            posts: p.user.posts.select(p => ({
+                id: p.id,
+                content: p.content
+            })).toList('posts')
+        })).toList();
+
         //Obtaining author name from post (possibly fixed in 0.0.5)
         const otherWay = dbContext.posts.where(p => eq(p.authorId, 3)).select(p => ({
             id: p.id,

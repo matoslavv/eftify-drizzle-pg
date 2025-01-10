@@ -19,17 +19,20 @@ export class DbCollection<TEntity extends DbEntity<any, AnyPgTable>> {
 	private _context: WeakRef<DbContext>
 	private _pendingWhere: any
 	private _pendingRelations!: DbQueryRelation[]
+	private _uniqueRelKey: string
 
 	constructor(
 		context: DbContext,
 		parentEntity: any,
 		relation: DbQueryRelationRecord,
-		entity: TEntity
+		entity: TEntity,
+		uniqueRelKey: string
 	) {
 		this._context = new WeakRef(context)
 		this._parentEntity = new WeakRef(parentEntity)
 		this._relation = new WeakRef(relation)
 		this._entity = entity;
+		this._uniqueRelKey = uniqueRelKey;
 	}
 
 	get context(): DbContext {
@@ -104,15 +107,13 @@ export class DbCollection<TEntity extends DbEntity<any, AnyPgTable>> {
 			throw 'Parent or relation reference lost...should not happen'
 		}
 
-		const normalizedRelation = relation.normalizedRelation
-		const joinOn = and(
-			...normalizedRelation.fields.map((field, i) =>
-				eq(
-					normalizedRelation.references[i],
-					field,
-				)
-			),
-		);
+		const joinOn = DbQueryCommon.createJoinOn({
+			callingEntity: parent,
+			childEntity: this._entity,
+			relation: relation,
+			uniqueKey: this._uniqueRelKey,
+			joinDeclaration: null
+		});
 
 		let select = this.db
 			.select(columns)
