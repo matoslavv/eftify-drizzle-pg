@@ -182,13 +182,13 @@ export class DbQueryCommon {
 
 	static traceExecutionStart(label: string): void {
 		if (DbEftifyConfig.traceEnabled) {
-			//console.time(label)
+			console.time(label)
 		}
 	}
 
 	static traceExecutionEnd(label: string): void {
 		if (DbEftifyConfig.traceEnabled) {
-			//console.timeEnd(label)
+			console.timeEnd(label)
 		}
 	}
 }
