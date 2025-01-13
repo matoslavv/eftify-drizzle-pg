@@ -180,15 +180,8 @@ export class DbQueryCommon {
 		return select
 	}
 
-	static traceExecutionStart(label: string): void {
-		if (DbEftifyConfig.traceEnabled) {
-			console.time(label)
-		}
-	}
-
-	static traceExecutionEnd(label: string): void {
-		if (DbEftifyConfig.traceEnabled) {
-			console.timeEnd(label)
-		}
+	/** @internal */
+	static getTraceMessage(queryType: 'firstOrDefault' | 'toList'): string {
+		return `Executing query ${queryType}, query ID: q${new Date().getTime()}`
 	}
 }

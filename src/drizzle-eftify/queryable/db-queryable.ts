@@ -5,6 +5,7 @@ import { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import { GroupedDbQueryable } from '../grouped-db-queryable'
 import { AnyPgColumn } from 'drizzle-orm/pg-core'
 import { SelectResult } from 'drizzle-orm/query-builders/select.types'
+import DbEftifyConfig from '../db-eftify-config'
 
 export class DbQueryable<TSelection extends SelectedFields<any, any>> {
 	private _db: PostgresJsDatabase<any>
@@ -74,17 +75,27 @@ export class DbQueryable<TSelection extends SelectedFields<any, any>> {
 
 
 	async firstOrDefault(): Promise<SelectResult<TSelection, 'multiple', any>> {
-		DbQueryCommon.traceExecutionStart('Executing query firstOrDefault')
-		const resultArr = await this._baseQuery.limit(1).execute()
-		DbQueryCommon.traceExecutionEnd('Executing query firstOrDefault')
-		return resultArr[0]
+		if (DbEftifyConfig.traceEnabled) {
+			const msg = DbQueryCommon.getTraceMessage('firstOrDefault');
+			console.time(msg);
+			const resultArr = await this._baseQuery.limit(1).execute();
+			console.timeEnd(msg);
+			return resultArr[0];
+		} else {
+			return (await this._baseQuery.limit(1).execute())[0];
+		}
 	}
 
 	async toList(): Promise<SelectResult<TSelection, 'multiple', any>[]> {
-		DbQueryCommon.traceExecutionStart('Executing query toList')
-		const retVal = await this._baseQuery
-		DbQueryCommon.traceExecutionEnd('Executing query toList')
-		return retVal
+		if (DbEftifyConfig.traceEnabled) {
+			const msg = DbQueryCommon.getTraceMessage('toList');
+			console.time(msg);
+			const retVal = await this._baseQuery;
+			console.timeEnd(msg);
+			return retVal;
+		} else {
+			return await this._baseQuery;
+		}
 	}
 
 	where(where: (aliases: TSelection) => SQL | undefined): DbQueryable<TSelection> {
