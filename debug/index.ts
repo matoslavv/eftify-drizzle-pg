@@ -28,6 +28,12 @@ const drizzleEftified = drizzleEftify.create(queryConnection, {
     try {
         const dbContext = drizzleEftified.eftify;
 
+        //All users without projection
+        const allUsers = await dbContext.users.toList();
+
+        //All users without projection, sorted
+        const sortedUsers = await dbContext.users.orderBy(p => [p.name, p.id]).toList();
+
         //Queries list
         const userList = await dbContext.users.where(p => lt(p.id, 90)).select(p => ({
             id: p.id,
