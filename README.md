@@ -5,7 +5,7 @@
 [![Downloads][downloads-img]][downloads-url]
 [![Issues][issues-img]][issues-url]
 
-> EF Core-like queries using Drizzle ORM
+> EF Core-like queries similar to LINQ using Drizzle ORM
 
 ## Install
 
@@ -14,7 +14,7 @@ npm install eftify-drizzle-pg
 ```
 
 ## About the library
-Small library attempting to bring other relational syntax to Drizzle ORM. Might help anyone transitioning from EF Core who does not like the drizzle query API. As for now supports only Postgres database with limited functionality available. No guarantee given whatsover, use at your own risk.
+Small library attempting to bring other relational syntax to Drizzle ORM similar to LINQ in composition. Might help anyone transitioning from EF Core who does not like the drizzle query API. As for now supports only Postgres database with limited functionality available. No guarantee given whatsover, use at your own risk.
 
 Library can run alongside standard drizzle. All it does is create new "eftify" property on the root drizzle object with new API available.
 
