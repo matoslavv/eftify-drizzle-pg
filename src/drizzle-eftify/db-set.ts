@@ -18,6 +18,7 @@ export class DbSet<TDataModel extends any, TTable extends AnyPgTable, TEntity ex
 	private _entity: TEntity
 	private _context: WeakRef<DbContext>
 	private _pendingWhere: any
+	private _pendingOrderBy: any
 	private _pendingRelations!: DbQueryRelation[]
 
 	constructor(context: DbContext, entity: TEntity) {
@@ -53,7 +54,6 @@ export class DbSet<TDataModel extends any, TTable extends AnyPgTable, TEntity ex
 	}
 
 	where(where: (aliases: TEntity) => SQL | undefined): this {
-		const db = this.db
 		this._entity.subscribeNavigation((args) => {
 			if (this._pendingRelations == null) {
 				this._pendingRelations = []
@@ -74,6 +74,37 @@ export class DbSet<TDataModel extends any, TTable extends AnyPgTable, TEntity ex
 			this._pendingWhere = and(this._pendingWhere, whereCondition)
 		}
 
+		return this
+	}
+
+
+	orderBy(builder: (aliases: TEntity) => ValueOrArray<AnyPgColumn | SQL | SQL.Aliased>): this {
+		if (this._pendingOrderBy != null) {
+			throw 'Order by is already specified, only one orderBy vlause supported per DbSet. If you need further sorting, considering making a projection by using .select(p => ...) and making the sort afterwards'
+		}
+
+		this._entity.subscribeNavigation((args) => {
+			if (this._pendingRelations == null) {
+				this._pendingRelations = []
+			}
+
+			this._pendingRelations.push(args.navigation)
+		})
+
+		let orderByStatement: any;
+		if (Array.isArray(builder)) {
+			const unwrapper = (a: any): any => {
+				return a;
+			}
+
+			// @ts-ignore
+			orderByStatement = unwrapper(...(builder as any))
+		} else {
+			orderByStatement = builder(this._entity);
+		}
+
+
+		this._pendingOrderBy = orderByStatement;
 		return this
 	}
 
@@ -162,14 +193,19 @@ export class DbSet<TDataModel extends any, TTable extends AnyPgTable, TEntity ex
 		let select = this.db.select(columns).from(this._entity.table)
 		if (this._pendingWhere != null) {
 			select = select.where(this._pendingWhere) as any
+			this._pendingWhere = null;
+		}
+
+		if (this._pendingOrderBy != null) {
+			select = select.orderBy(this._pendingOrderBy) as any
+			this._pendingOrderBy = null;
 		}
 
 		if (this._pendingRelations?.length > 0) {
-			select = DbQueryCommon.buildRelations(select as any, this._pendingRelations) as any
+			select = DbQueryCommon.buildRelations(select as any, this._pendingRelations) as any;
+			this._pendingRelations = null as any;
 		}
 
-		this._pendingWhere = null
-		this._pendingRelations = null as any
 		return select
 	}
 }
