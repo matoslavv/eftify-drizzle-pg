@@ -1,8 +1,10 @@
 import {
 	InferInsertModel,
+	InferModelFromColumns,
 	InferSelectModel,
 	SQL,
 	SelectedFields,
+	Table,
 	ValueOrArray,
 	and
 } from 'drizzle-orm'
@@ -14,12 +16,23 @@ import { DbQueryCommon } from './db-query-common'
 import { DbQueryRelation } from './db-query-relation'
 import { DbQueryable } from './queryable/db-queryable'
 
+export type EftifyUpdateModel<TTable extends Table, TConfig extends {
+	dbColumnNames: boolean;
+	override?: boolean;
+} = {
+	dbColumnNames: false;
+	override: false;
+}> = Partial<InferModelFromColumns<TTable['_']['columns'], 'select', TConfig>>;
+
+export type EftifyInsertModel<TTable extends Table> = InferInsertModel<TTable> & EftifyUpdateModel<TTable>;
+
 export class DbSet<TDataModel extends any, TTable extends AnyPgTable, TEntity extends DbEntity<TDataModel, TTable>> {
 	private _entity: TEntity
 	private _context: WeakRef<DbContext>
 	private _pendingWhere: any
 	private _pendingOrderBy: any
 	private _pendingRelations!: DbQueryRelation[]
+
 
 	constructor(context: DbContext, entity: TEntity) {
 		this._context = new WeakRef(context)
@@ -140,11 +153,11 @@ export class DbSet<TDataModel extends any, TTable extends AnyPgTable, TEntity ex
 		return (await this.createEmptyQuery()) as any
 	}
 
-	insert(value: InferInsertModel<TTable> | InferInsertModel<TTable>[]) {
+	insert(value: EftifyInsertModel<TTable> | EftifyInsertModel<TTable>[]) {
 		return this.db.insert(this._entity.table as any).values(value)
 	}
 
-	update(value: Partial<InferInsertModel<TTable>>) {
+	update(value: EftifyUpdateModel<TTable>) {
 		let query = this.db.update(this._entity.table).set(value as any)
 		if (this._pendingWhere != null) {
 			query = query.where(this._pendingWhere) as any
@@ -190,7 +203,7 @@ export class DbSet<TDataModel extends any, TTable extends AnyPgTable, TEntity ex
 	}
 
 	private createQuery<TColumns extends SelectedFields<any, any>>(columns: TColumns) {
-		let select = this.db.select(columns).from(this._entity.table)
+		let select = this.db.select(columns).from(this._entity.table as any)
 		if (this._pendingWhere != null) {
 			select = select.where(this._pendingWhere) as any
 			this._pendingWhere = null;
