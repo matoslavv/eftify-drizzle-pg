@@ -1,6 +1,6 @@
 {
   "name": "eftify-drizzle-pg",
-  "version": "0.0.16",
+  "version": "0.0.17",
   "description": "Package that aims to bring basic EF-like queries, similar to LINQ syntax to Drizzle ORM",
   "main": "./lib/index.js",
   "files": [
@@ -46,7 +46,7 @@
     "typescript": "^5.6.3"
   },
   "peerDependencies": {
-    "drizzle-orm": "^0.39.2"
+    "drizzle-orm": "^0.39.3"
   },
   "release": {
     "branches": [
