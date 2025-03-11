@@ -1,8 +1,10 @@
 import {
 	InferInsertModel,
+	InferModelFromColumns,
 	InferSelectModel,
 	SQL,
 	SelectedFields,
+	Table,
 	ValueOrArray,
 	and
 } from 'drizzle-orm'
@@ -14,11 +16,23 @@ import { DbQueryCommon } from './db-query-common'
 import { DbQueryRelation } from './db-query-relation'
 import { DbQueryable } from './queryable/db-queryable'
 
+export type EftifyUpdateModel<TTable extends Table, TConfig extends {
+	dbColumnNames: boolean;
+	override?: boolean;
+} = {
+	dbColumnNames: false;
+	override: false;
+}> = Partial<InferModelFromColumns<TTable['_']['columns'], 'select', TConfig>>;
+
+export type EftifyInsertModel<TTable extends Table> = InferInsertModel<TTable> & EftifyUpdateModel<TTable>;
+
 export class DbSet<TDataModel extends any, TTable extends AnyPgTable, TEntity extends DbEntity<TDataModel, TTable>> {
 	private _entity: TEntity
 	private _context: WeakRef<DbContext>
 	private _pendingWhere: any
+	private _pendingOrderBy: any
 	private _pendingRelations!: DbQueryRelation[]
+
 
 	constructor(context: DbContext, entity: TEntity) {
 		this._context = new WeakRef(context)
@@ -53,7 +67,6 @@ export class DbSet<TDataModel extends any, TTable extends AnyPgTable, TEntity ex
 	}
 
 	where(where: (aliases: TEntity) => SQL | undefined): this {
-		const db = this.db
 		this._entity.subscribeNavigation((args) => {
 			if (this._pendingRelations == null) {
 				this._pendingRelations = []
@@ -74,6 +87,37 @@ export class DbSet<TDataModel extends any, TTable extends AnyPgTable, TEntity ex
 			this._pendingWhere = and(this._pendingWhere, whereCondition)
 		}
 
+		return this
+	}
+
+
+	orderBy(builder: (aliases: TEntity) => ValueOrArray<AnyPgColumn | SQL | SQL.Aliased>): this {
+		if (this._pendingOrderBy != null) {
+			throw 'Order by is already specified, only one orderBy vlause supported per DbSet. If you need further sorting, considering making a projection by using .select(p => ...) and making the sort afterwards'
+		}
+
+		this._entity.subscribeNavigation((args) => {
+			if (this._pendingRelations == null) {
+				this._pendingRelations = []
+			}
+
+			this._pendingRelations.push(args.navigation)
+		})
+
+		let orderByStatement: any;
+		if (Array.isArray(builder)) {
+			const unwrapper = (a: any): any => {
+				return a;
+			}
+
+			// @ts-ignore
+			orderByStatement = unwrapper(...(builder as any))
+		} else {
+			orderByStatement = builder(this._entity);
+		}
+
+
+		this._pendingOrderBy = orderByStatement;
 		return this
 	}
 
@@ -109,11 +153,11 @@ export class DbSet<TDataModel extends any, TTable extends AnyPgTable, TEntity ex
 		return (await this.createEmptyQuery()) as any
 	}
 
-	insert(value: InferInsertModel<TTable> | InferInsertModel<TTable>[]) {
+	insert(value: EftifyInsertModel<TTable> | EftifyInsertModel<TTable>[]) {
 		return this.db.insert(this._entity.table as any).values(value)
 	}
 
-	update(value: Partial<InferInsertModel<TTable>>) {
+	update(value: EftifyUpdateModel<TTable>) {
 		let query = this.db.update(this._entity.table).set(value as any)
 		if (this._pendingWhere != null) {
 			query = query.where(this._pendingWhere) as any
@@ -159,17 +203,22 @@ export class DbSet<TDataModel extends any, TTable extends AnyPgTable, TEntity ex
 	}
 
 	private createQuery<TColumns extends SelectedFields<any, any>>(columns: TColumns) {
-		let select = this.db.select(columns).from(this._entity.table)
+		let select = this.db.select(columns).from(this._entity.table as any)
 		if (this._pendingWhere != null) {
 			select = select.where(this._pendingWhere) as any
+			this._pendingWhere = null;
+		}
+
+		if (this._pendingOrderBy != null) {
+			select = select.orderBy(this._pendingOrderBy) as any
+			this._pendingOrderBy = null;
 		}
 
 		if (this._pendingRelations?.length > 0) {
-			select = DbQueryCommon.buildRelations(select as any, this._pendingRelations) as any
+			select = DbQueryCommon.buildRelations(select as any, this._pendingRelations) as any;
+			this._pendingRelations = null as any;
 		}
 
-		this._pendingWhere = null
-		this._pendingRelations = null as any
 		return select
 	}
 }
