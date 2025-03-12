@@ -1,7 +1,6 @@
 # eftify-drizzle-pg
 
 [![npm package][npm-img]][npm-url]
-[![Build Status][build-img]][build-url]
 [![Downloads][downloads-img]][downloads-url]
 [![Issues][issues-img]][issues-url]
 
@@ -68,6 +67,16 @@ const drizzleEftified = drizzleEftify.create(queryConnection, {
         })).toList('posty')               //Due to limitations requires name specification
     })).firstOrDefault();
 
+    //Querying from entity joined by array column
+    const allGroups = await dbContext.userGroups.select(p => ({
+        id: p.id,
+        name: p.name,
+        users: p.users.select(u => ({
+            id: u.id,
+            name: u.name
+        })).toList('users')
+    })).toList();
+
     //Simple sum
     const summary = await dbContext.users.where(p => and(
         lt(p.id, 2),
@@ -132,6 +141,7 @@ const drizzleEftified = drizzleEftify.create(queryConnection, {
 ```ts
 import { relations } from 'drizzle-orm';
 import { integer, pgTable, text } from 'drizzle-orm/pg-core';
+import { eftifyRelations } from 'eftify-drizzle-pg';
 
 // ==================== USERS ====================
 export const users = pgTable('users', {
@@ -169,6 +179,19 @@ export const postsRelations = relations(posts, ({ one }) => ({
 		fields: [posts.authorId],
 		references: [users.id],
 	}),
+}));
+
+// ==================== USER GROUPS ====================
+export const userGroups = pgTable('user_groups', {
+    id: integer('id').primaryKey().generatedAlwaysAsIdentity({ name: 'user_groups_id_seq' }),
+    name: text('name'),
+    usersIds: integer('user_ids').array(),
+});
+export const userGroupsRelations = eftifyRelations(userGroups, ({ manyFromKeyArray }) => ({
+    users: manyFromKeyArray(users, {
+        fields: [userGroups.usersIds],
+        references: [users.id]
+    })
 }));
 
 // ============ UNRELATED TABLE =================

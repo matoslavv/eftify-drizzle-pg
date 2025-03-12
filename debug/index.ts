@@ -50,6 +50,16 @@ const drizzleEftified = drizzleEftify.create(queryConnection, {
             })).toList('posts')               //Due to limitations requires name specification
         })).toList();
 
+        //Querying from entity joined by array column
+        const allGroups = await dbContext.userGroups.select(p => ({
+            id: p.id,
+            name: p.name,
+            users: p.users.select(u => ({
+                id: u.id,
+                name: u.name
+            })).toList('users')
+        })).toList();
+
         //Navigating through 2 levels of entities obtaining collection (fixed in 0.0.7)
         const nestedResults = await dbContext.userAddress.select(p => ({
             id: p.id,
