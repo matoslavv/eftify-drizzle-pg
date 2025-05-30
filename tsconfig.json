@@ -20,6 +20,10 @@
     "emitDecoratorMetadata": true,
     "sourceMap": true,
     "baseUrl": ".",
+	"types": [
+		"jest",
+		"node"
+	],
   },
   "include": [
     "src/**/*.ts",

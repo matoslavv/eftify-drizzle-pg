@@ -12,7 +12,7 @@
     "clean": "rm -rf ./lib/",
     "cm": "cz",
     "test:watch": "jest --watch",
-    "test": "jest --coverage",
+    "test": "jest --coverage --detectOpenHandles --forceExit",
     "typecheck": "tsc --noEmit"
   },
   "repository": {
@@ -38,15 +38,18 @@
   },
   "homepage": "github.com/brunolau/eftify-drizzle-pg",
   "devDependencies": {
+	"@jest/globals": "^29.7.0",
+	"@types/jest": "^29.5.14",
     "@types/node": "^22.7.5",
     "dotenv": "^16.4.1",
-    "drizzle-kit": "0.30.4",
+    "drizzle-kit": "0.31.1",
     "postgres": "^3.3.3",
     "tsx": "^4.7.1",
-    "typescript": "^5.6.3"
+    "typescript": "^5.6.3",
+	"ts-jest": "^29.3.4"
   },
   "peerDependencies": {
-    "drizzle-orm": "^0.39.3"
+    "drizzle-orm": "^0.43.1"
   },
   "release": {
     "branches": [
