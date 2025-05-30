@@ -1,12 +1,13 @@
-import { Column, DrizzleConfig, ExtractTableRelationsFromSchema, NormalizedRelation, normalizeRelation, One, Relation, Table } from "drizzle-orm";
+import { Column, DrizzleConfig, ExtractTableRelationsFromSchema, normalizeRelation, One, Relation, Table } from "drizzle-orm";
 import { AnyPgTable, PgTransactionConfig } from "drizzle-orm/pg-core";
 import { drizzle, PostgresJsDatabase } from "drizzle-orm/postgres-js";
-import { DbSet } from "./drizzle-eftify/db-set";
-import { DbEntity } from "./drizzle-eftify/db-entity";
-import { DbContext } from "./drizzle-eftify/db-context";
 import { DbCollection } from "./drizzle-eftify/db-collection";
-import { DbQueryRelationRecord } from "./drizzle-eftify/db-query-relation";
+import { DbContext } from "./drizzle-eftify/db-context";
 import DbEftifyConfig from "./drizzle-eftify/db-eftify-config";
+import { DbEntity } from "./drizzle-eftify/db-entity";
+import { DbQueryRelationRecord } from "./drizzle-eftify/db-query-relation";
+import { DbSet } from "./drizzle-eftify/db-set";
+import { eftifyRelations as eftifyRelationsImp } from "./drizzle-eftify/relations/eftify-relations";
 
 
 type RelationBuilder<TSchemaFull extends
@@ -160,7 +161,6 @@ const drizzleEftifyCreateRelations = <TSchemaFull extends Record<string, unknown
 
         //Build relations
         for (const [relName] of Object.entries(relations)) {
-            const relation: NormalizedRelation = normalizeRelation(schema, tableNamesMap, relations[relName]);
             let tableName = relations[relName].referencedTableName;
             if (dbTsNameMap[tableName] != null) {
                 tableName = dbTsNameMap[tableName];
@@ -172,11 +172,22 @@ const drizzleEftifyCreateRelations = <TSchemaFull extends Record<string, unknown
             }
 
             const uniqueKey = relName + tableName;
-            const isOneToOne = (relations[relName] as any).constructor.name == 'One';
+            const isOneToOne = relations[relName]._custom ? relations[relName].type != 'many' : (relations[relName] as any).constructor.name == 'One';
             const relationItem: DbQueryRelationRecord = {
-				mandatory: !((relations[relName] as One).isNullable != true),
-                normalizedRelation: relation
+                mandatory: !relations[relName]._custom ? !((relations[relName] as One).isNullable != true) : relations[relName].mandatory,
+                normalizedRelation: relations[relName].normalizedRelation || normalizeRelation(schema, tableNamesMap, relations[relName])
             };
+
+            if (relations[relName]._custom) {
+                if (relations[relName].buildJoinSql != null) {
+                    const buildFunc = relations[relName].buildJoinSql;
+                    relationItem.customRelationDefinition = {
+                        buildJoinSql: (args) => {
+                            return buildFunc(args);
+                        }
+                    }
+                }
+            }
 
             if (isOneToOne) {
                 Object.defineProperty((entityClass as any).prototype, relName, {
@@ -235,6 +246,7 @@ const drizzleEftifyCreateRelations = <TSchemaFull extends Record<string, unknown
     return retObj;
 }
 
+export const eftifyRelations = eftifyRelationsImp;
 export const drizzleEftify = {
     create: createEftify,
     config: DbEftifyConfig

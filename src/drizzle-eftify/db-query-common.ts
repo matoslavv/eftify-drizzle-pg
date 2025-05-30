@@ -123,6 +123,14 @@ export class DbQueryCommon {
 		}
 
 		const keyPairs: string[][] = (relationItem.relation as any)._keyPairs;
+		if (relationItem.relation.customRelationDefinition?.buildJoinSql != null) {
+			return relationItem.relation.customRelationDefinition.buildJoinSql({
+				childEntity: relationItem.childEntity,
+				callingEntity: relationItem.callingEntity,
+				keyPairs
+			});
+		}
+
 		const joinOn = and(
 			...keyPairs.map((field, i) =>
 				eq(
