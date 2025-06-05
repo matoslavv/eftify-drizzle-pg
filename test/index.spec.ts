@@ -478,22 +478,27 @@ describe('index test', () => {
 	});
 
 	it('fails to insert new user in transaction with rollback', async () => {
-		const userRow: void = await db.transaction(async trx => {
-			try {
-				const userRow = await trx.users.insert({
-					name: 'new user with rollback'
-				}).returning({
-					id: trx.users.getUnderlyingEntity().id
-				});
+		let userRow: void = null;
+		try {
+			userRow = await db.transaction(async (trx: any) => {
+				try {
+					const userRow = await trx.users.insert({
+						name: 'new user with rollback'
+					}).returning({
+						id: trx.users.getUnderlyingEntity().id
+					});
 
-				throw new Error('Rollback');
-			} catch (error) {
-				await trx.rollback();
-			}
-		});
-
-		const users = await db.users.toList();
-		expect(users).toHaveLength(0);
-		expect(userRow).toBeNull();
+					throw new Error('Rollback');
+				} catch (error) {
+					await trx.rollback();
+				}
+			});
+		} catch (error) {
+			// drizzle excption
+		} finally {
+			const users = await db.users.toList();
+			expect(users).toHaveLength(0);
+			expect(userRow).toBeNull();
+		}
 	});
 });
