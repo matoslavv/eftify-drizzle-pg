@@ -1,5 +1,6 @@
 import { relations } from 'drizzle-orm';
 import { integer, pgTable, text } from 'drizzle-orm/pg-core';
+import { eftifyRelations } from '../src';
 
 // ==================== USERS ====================
 export const users = pgTable('users', {
@@ -40,6 +41,18 @@ export const postsRelations = relations(posts, ({ one }) => ({
     }),
 }));
 
+// ==================== USER GROUPS ====================
+export const userGroups = pgTable('user_groups', {
+    id: integer('id').primaryKey().generatedAlwaysAsIdentity({ name: 'user_groups_id_seq' }),
+    name: text('name'),
+    usersIds: integer('user_ids').array(),
+});
+export const userGroupsRelations = eftifyRelations(userGroups, ({ manyFromKeyArray }) => ({
+    users: manyFromKeyArray(users, {
+        fields: [userGroups.usersIds],
+        references: [users.id]
+    })
+}));
 
 // ============ UNRELATED TABLE =================
 export const unrelatedTable = pgTable('unrelated_table', {
