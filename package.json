@@ -1,6 +1,6 @@
 {
   "name": "eftify-drizzle-pg",
-  "version": "0.0.19",
+  "version": "0.0.20",
   "description": "Package that aims to bring basic EF-like queries, similar to LINQ syntax to Drizzle ORM",
   "main": "./lib/index.js",
   "files": [
@@ -39,15 +39,15 @@
   },
   "homepage": "github.com/brunolau/eftify-drizzle-pg",
   "devDependencies": {
-	"@jest/globals": "^29.7.0",
-	"@types/jest": "^29.5.14",
+    "@jest/globals": "^29.7.0",
+    "@types/jest": "^29.5.14",
     "@types/node": "^22.7.5",
     "dotenv": "^16.4.1",
     "drizzle-kit": "0.31.1",
     "postgres": "^3.3.3",
     "tsx": "^4.7.1",
     "typescript": "^5.6.3",
-	"ts-jest": "^29.3.4"
+    "ts-jest": "^29.3.4"
   },
   "peerDependencies": {
     "drizzle-orm": "^0.43.1"
