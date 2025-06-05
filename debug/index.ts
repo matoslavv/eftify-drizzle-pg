@@ -101,8 +101,9 @@ const drizzleEftified = drizzleEftify.create(queryConnection, {
         })).toList();
 
         //Insert example + transaction
-        const userRow = await dbContext.transaction(async trx => {
-            try {
+        //In case of error thrown in the "async trx" section, it's automatically rolled back
+        try {
+            const userRow = await dbContext.transaction(async trx => {
                 const userRow = await trx.users.insert({
                     name: 'new user'
                 }).returning({
@@ -115,11 +116,28 @@ const drizzleEftified = drizzleEftify.create(queryConnection, {
                 });
 
                 return { id: userRow[0].id };
-            } catch (error) {
+            });
+        } catch (error) {
+            console.error(error);
+        }
+
+        //Transaction rollback
+        try {
+            await dbContext.transaction(async trx => {
+                const userRow = await trx.users.insert({
+                    name: 'new user - will be rolled back'
+                }).returning({
+                    id: trx.users.getUnderlyingEntity().id
+                });
+
+                const userAddressRow = await trx.userAddress.insert({
+                    userId: userRow[0].id,
+                    address: 'some address'
+                });
+
                 await trx.rollback();
-                return null;
-            }
-        });
+            });
+        } catch (error) { }
 
         //Update example
         const affectedCount = await dbContext.users.where(p => eq(p.id, 1)).update({

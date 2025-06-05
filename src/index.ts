@@ -236,7 +236,7 @@ const drizzleEftifyCreateRelations = <TSchemaFull extends Record<string, unknown
 
         Object.defineProperty(retObj, tableName, {
             get: () => {
-                const context = new DbContextImpl(drizzleDb);
+                const context = new DbContextImpl(retObj.db ?? drizzleDb);
                 const ctor: any = entityCache[tableName];
                 return new DbSet(context, new ctor(context, table));
             },
