@@ -50,6 +50,16 @@ const drizzleEftified = drizzleEftify.create(queryConnection, {
             })).toList('posts')               //Due to limitations requires name specification
         })).toList();
 
+        //Queries list obtaining "many" navigation property defined using the {manyCustomDefined} syntax
+        const customPostsResult = await dbContext.users.where(p => lt(p.id, 90)).select(p => ({
+            id: p.id,
+            street: p.userAddress.address,
+            custTotal: p.customPosts.select(p => ({
+                id: p.id,
+                text: p.content
+            })).toList('customPosts')
+        })).toList();
+
         //Querying from entity joined by array column
         const allGroups = await dbContext.userGroups.select(p => ({
             id: p.id,

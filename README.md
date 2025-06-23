@@ -51,6 +51,16 @@ const drizzleEftified = drizzleEftify.create(queryConnection, {
         })).toList('posts')               //Due to limitations requires name specification
     })).toList();
 
+    //Queries list obtaining "many" navigation property defined using the {manyCustomDefined} syntax
+    const customPostsResult = await dbContext.users.where(p => lt(p.id, 90)).select(p => ({
+        id: p.id,
+        street: p.userAddress.address,
+        custTotal: p.customPosts.select(p => ({
+            id: p.id,
+            text: p.content
+        })).toList('customPosts')
+    })).toList();
+
     //Obtaining author name from post (possibly fixed in 0.0.5)
     const otherWay = dbContext.posts.where(p => eq(p.authorId, 3)).select(p => ({
         id: p.id,
@@ -167,12 +177,16 @@ export const users = pgTable('users', {
 	name: text('name'),
 });
 
-export const usersRelations = relations(users, ({ one, many }) => ({
-	userAddress: one(userAddress, {
-		fields: [users.id],
-		references: [userAddress.userId],
-	}),
-	posts: many(posts),
+export const usersRelations = eftifyRelations(users, ({ one, many, manyCustomDefined }) => ({
+    userAddress: one(userAddress, {
+        fields: [users.id],
+        references: [userAddress.userId],
+    }),
+    posts: many(posts), //Standard drizzle syntax
+    customPosts: manyCustomDefined(posts, {   //Custom eftify syntax allowing navigation specification
+        fields: [users.id],
+        references: [posts.authorId]
+    })
 }));
 
 // ==================== USER ADDRESS ====================

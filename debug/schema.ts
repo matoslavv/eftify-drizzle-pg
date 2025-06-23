@@ -8,12 +8,16 @@ export const users = pgTable('users', {
     name: text('name'),
 });
 
-export const usersRelations = relations(users, ({ one, many }) => ({
+export const usersRelations = eftifyRelations(users, ({ one, many, manyCustomDefined }) => ({
     userAddress: one(userAddress, {
         fields: [users.id],
         references: [userAddress.userId],
     }),
-    posts: many(posts),
+    posts: many(posts), //Standard drizzle syntax
+    customPosts: manyCustomDefined(posts, {   //Custom eftify syntax allowing navigation specification
+        fields: [users.id],
+        references: [posts.authorId]
+    })
 }));
 
 // ==================== USER ADDRESS ====================

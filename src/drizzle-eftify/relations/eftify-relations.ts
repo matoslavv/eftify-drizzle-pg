@@ -12,6 +12,11 @@ declare function createTableRelationsHelpersEftify<TTableName extends string>(so
     many: <TForeignTable extends Table>(referencedTable: TForeignTable, config?: {
         relationName: string;
     }) => Many<TForeignTable["_"]["name"]>;
+    manyCustomDefined: <TForeignTable extends Table, TColumns extends [AnyColumn<{
+        tableName: TTableName;
+    }>, ...AnyColumn<{
+        tableName: TTableName;
+    }>[]]>(table: TForeignTable, config?: RelationConfig<TTableName, TForeignTable["_"]["name"], TColumns> & { mandatory?: boolean } | undefined) => Many<TForeignTable["_"]["name"]>;
     manyFromKeyArray: <TForeignTable extends Table, TColumns extends [AnyColumn<{
         tableName: TTableName;
     }>, ...AnyColumn<{
@@ -20,15 +25,21 @@ declare function createTableRelationsHelpersEftify<TTableName extends string>(so
 };
 export type EftifyTableRelationsHelpers<TTableName extends string> = ReturnType<typeof createTableRelationsHelpersEftify<TTableName>>;
 
-class ManyFromKeyArray<
+const enum ManyCustomDefinedMode {
+    NORMAL = 0,
+    ARRAY = 1
+}
+
+class ManyCustomDefined<
     TTableName extends string = string,
     TIsNullable extends boolean = boolean,
 > extends Relation<TTableName> {
-    static override readonly [entityKind]: string = 'ManyFromKeyArray';
-    declare protected $relationBrand: 'ManyFromKeyArray';
+    static override readonly [entityKind]: string = 'ManyCustomDefined';
+    declare protected $relationBrand: 'ManyCustomDefined';
 
     type = 'many';
     _custom = true;
+    _relationMode = 0;
 
     constructor(
         sourceTable: Table,
@@ -45,12 +56,13 @@ class ManyFromKeyArray<
         readonly normalizedRelation: any
     ) {
         super(sourceTable, referencedTable, config?.relationName);
+        this._relationMode = (config as any)?._relationMode ?? ManyCustomDefinedMode.NORMAL;
     }
 
     static createFromConfig(helpers: any, table: Table, config: any) {
         const builtObj: any = helpers.one(table, config);
 
-        return new ManyFromKeyArray(
+        return new ManyCustomDefined(
             builtObj.sourceTable,
             builtObj.referencedTable,
             config,
@@ -61,10 +73,14 @@ class ManyFromKeyArray<
                         const childCol = args.childEntity.table[field[1]];
                         const parentCol = args.callingEntity.table[field[0]];
 
-                        if (childCol.columnType == 'PgArray') {
-                            return eq(parentCol, sql`ANY(${childCol})`)
+                        if (config._relationMode == ManyCustomDefinedMode.ARRAY) {
+                            if (childCol.columnType == 'PgArray') {
+                                return eq(parentCol, sql`ANY(${childCol})`)
+                            } else {
+                                return eq(childCol, sql`ANY(${parentCol})`)
+                            }
                         } else {
-                            return eq(childCol, sql`ANY(${parentCol})`)
+                            return eq(parentCol, childCol);
                         }
                     })
                 );
@@ -76,8 +92,8 @@ class ManyFromKeyArray<
         )
     }
 
-    withFieldName(fieldName: string): ManyFromKeyArray<TTableName> {
-        const relation = new ManyFromKeyArray(
+    withFieldName(fieldName: string): ManyCustomDefined<TTableName> {
+        const relation = new ManyCustomDefined(
             this.sourceTable,
             this.referencedTable,
             this.config,
@@ -97,7 +113,21 @@ export function eftifyRelations<TTableName extends string, TRelations extends Re
 }>, relationConfig: (helpers: EftifyTableRelationsHelpers<TTableName> & { cust: string }) => TRelations): Relations<TTableName, TRelations> {
     return (relations as typeof eftifyRelations)(table, (helpers) => {
         (helpers as any).manyFromKeyArray = (table: any, config: any) => {
-            return ManyFromKeyArray.createFromConfig(helpers, table, config);
+            if (config == null) {
+                config = {};
+            }
+
+            config._relationMode = ManyCustomDefinedMode.ARRAY;
+            return ManyCustomDefined.createFromConfig(helpers, table, config);
+        };
+
+        (helpers as any).manyCustomDefined = (table: any, config: any) => {
+            if (config == null) {
+                config = {};
+            }
+
+            config._relationMode = ManyCustomDefinedMode.NORMAL;
+            return ManyCustomDefined.createFromConfig(helpers, table, config);
         };
 
         return relationConfig(helpers);
