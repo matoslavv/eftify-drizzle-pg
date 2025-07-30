@@ -141,7 +141,7 @@ export class DbSet<TDataModel extends any, TTable extends AnyPgTable, TEntity ex
 			//Might have been build in previous step
 		}
 
-		DbQueryCommon.setFormatColumnsOnBaseQuery(this, select, relationArr);
+		DbQueryCommon.setFormatColumnsOnBaseQuery(this, select, columns);
 		return new DbQueryable(db, select, 1)
 	}
 

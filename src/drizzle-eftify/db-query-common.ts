@@ -17,10 +17,6 @@ export class DbQueryCommon {
 						callingEntity: null,
 						childEntity: null,
 						relation: null,
-						formatColumns: {
-							fieldName: name,
-							selection: (field as EftifyCollectionJoinDeclaration).selectedColumns
-						},
 						uniqueKey: (field as EftifyCollectionJoinDeclaration).id + (field as EftifyCollectionJoinDeclaration).columnName,
 						joinDeclaration: {
 							sql: (field as EftifyCollectionJoinDeclaration).sql,
@@ -37,6 +33,11 @@ export class DbQueryCommon {
 					fields[name] = retQuery.as((field as EftifyCollectionJoinDeclaration).columnName);
 				} else {
 					fields[name] = (field as EftifyCollectionJoinDeclaration).sql.as((field as EftifyCollectionJoinDeclaration).columnName);
+				}
+
+				fields[name].eftifyFormatColumn = {
+					fieldName: name,
+					selection: (field as EftifyCollectionJoinDeclaration).selectedColumns
 				}
 
 				field = fields[name];
@@ -201,8 +202,15 @@ export class DbQueryCommon {
 		return `Executing query ${queryType}, query ID: q${new Date().getTime()}`
 	}
 
-	static setFormatColumnsOnBaseQuery(instance: any, select: any, relationArr: DbQueryRelation[]) {
-		(select as any)._formatCollections = relationArr.filter(p => p.formatColumns != null).map(p => p.formatColumns);
+	static setFormatColumnsOnBaseQuery(instance: any, select: any, columns: any) {
+		const formatCollection = [];
+		for (let [name, field] of Object.entries(columns)) {
+			if ((field as any).eftifyFormatColumn != null) {
+				formatCollection.push((field as any).eftifyFormatColumn);
+			}
+		}
+
+		(select as any)._formatCollections = formatCollection;
 	}
 
 	static mapCollectionValuesFromDriver(formatCollections: any[], result: any[]) {
