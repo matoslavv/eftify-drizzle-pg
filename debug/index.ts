@@ -120,6 +120,16 @@ const drizzleEftified = drizzleEftify.create(queryConnection, {
                     id: trx.users.getUnderlyingEntity().id
                 });
 
+                //If no chunk size specified, it's autodetected based on object size and PG default parameter count
+                const userRowsBulk = await trx.users.insertBulk([
+                    { name: 'new user bulk1' },
+                    { name: 'new user bulk2' },
+                    { name: 'new user bulk3' },
+                    { name: 'new user bulk4' },
+                ], { chunkSize: 1 }).returning({
+                    id: trx.users.getUnderlyingEntity().id
+                });
+
                 const userAddressRow = await trx.userAddress.insert({
                     userId: userRow[0].id,
                     address: 'some address'

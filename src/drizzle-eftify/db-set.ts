@@ -154,7 +154,26 @@ export class DbSet<TDataModel extends any, TTable extends AnyPgTable, TEntity ex
 	}
 
 	insert(value: EftifyInsertModel<TTable> | EftifyInsertModel<TTable>[]) {
-		return this.db.insert(this._entity.table as any).values(value)
+		return this.db.insert(this._entity.table as any).values(value);
+	}
+
+	insertBulk(value: EftifyInsertModel<TTable> | EftifyInsertModel<TTable>[], insertConfig?: InsertConfig): ReturnType<this['insert']> {
+		let baseBuilder: any = this.db.insert(this._entity.table as any);
+		if (Array.isArray(value) && (value as any[]).length > (insertConfig?.chunkSize ?? 700)) {
+			let chunkSize = insertConfig?.chunkSize;
+			if (chunkSize == null) {
+				const POSTGRES_MAX_ROWS_SINGLE_BATCH = 65534; // Most common limit
+				const columnCount = Object.keys(value[0])?.length;
+				const maxRowsPerBatch = Math.floor(POSTGRES_MAX_ROWS_SINGLE_BATCH / columnCount);
+				chunkSize = Math.floor(maxRowsPerBatch * 0.6); // Takes only 60% of the max rows to avoid hitting the limit
+			}
+
+			baseBuilder = new InsertChunkWrapper(baseBuilder, value, chunkSize);
+		} else {
+			baseBuilder = baseBuilder.values(value);
+		}
+
+		return baseBuilder;
 	}
 
 	update(value: EftifyUpdateModel<TTable>) {
@@ -220,5 +239,75 @@ export class DbSet<TDataModel extends any, TTable extends AnyPgTable, TEntity ex
 		}
 
 		return select
+	}
+}
+
+
+interface InsertConfig {
+	chunkSize?: number
+}
+
+interface IInsertChunkWrapper {
+	returningConfig?: any
+	onConflictDoNothingBound?: boolean
+	onConflictDoNothingArgs?: any
+	onConflictDoUpdateArgs?: any
+	execute(): Promise<any>
+}
+
+class InsertChunkWrapper implements IInsertChunkWrapper {
+	constructor(
+		private builder: any,
+		private valueArr: any[],
+		private chunkSize: number
+	) { }
+
+	values() {
+		return this;
+	}
+
+	returning(config: any) {
+		(this as unknown as IInsertChunkWrapper).returningConfig = config;
+		return this;
+	}
+
+	onConflictDoNothing(config: any) {
+		(this as unknown as IInsertChunkWrapper).onConflictDoNothingBound = true;
+		(this as unknown as IInsertChunkWrapper).onConflictDoNothingArgs = config;
+		return this;
+	}
+
+	onConflictDoUpdate(config: any) {
+		(this as unknown as IInsertChunkWrapper).onConflictDoUpdateArgs = config;
+		return this;
+	}
+
+	async execute() {
+		const results = [];
+
+		for (let i = 0; i < this.valueArr.length; i += this.chunkSize) {
+			const chunk = this.valueArr.slice(i, i + this.chunkSize);
+			let query = this.builder.values(chunk);
+
+			if ((this as unknown as IInsertChunkWrapper).returningConfig) {
+				query = query.returning((this as unknown as IInsertChunkWrapper).returningConfig);
+			}
+
+			if ((this as unknown as IInsertChunkWrapper).onConflictDoNothingBound) {
+				query = query.onConflictDoNothing((this as unknown as IInsertChunkWrapper).onConflictDoNothingArgs);
+			}
+
+			if ((this as unknown as IInsertChunkWrapper).onConflictDoUpdateArgs) {
+				query = query.onConflictDoUpdate((this as unknown as IInsertChunkWrapper).onConflictDoUpdateArgs);
+			}
+
+			results.push(...(await query));
+		}
+
+		return results;
+	}
+
+	then(onfulfilled: any, onrejected?: any) {
+		return this.execute().then(onfulfilled, onrejected);
 	}
 }
