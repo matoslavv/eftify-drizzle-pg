@@ -115,17 +115,18 @@ const drizzleEftified = drizzleEftify.create(queryConnection, {
         try {
             const userRow = await dbContext.transaction(async trx => {
                 const userRow = await trx.users.insert({
-                    name: 'new user'
+                    name: 'new user',
+                    createdAt: new Date(),
                 }).returning({
                     id: trx.users.getUnderlyingEntity().id
                 });
 
                 //If no chunk size specified, it's autodetected based on object size and PG default parameter count
                 const userRowsBulk = await trx.users.insertBulk([
-                    { name: 'new user bulk1' },
-                    { name: 'new user bulk2' },
-                    { name: 'new user bulk3' },
-                    { name: 'new user bulk4' },
+                    { name: 'new user bulk1', createdAt: new Date(), },
+                    { name: 'new user bulk2', createdAt: new Date() },
+                    { name: 'new user bulk3', createdAt: new Date() },
+                    { name: 'new user bulk4', createdAt: new Date() },
                 ], { chunkSize: 1 }).returning({
                     id: trx.users.getUnderlyingEntity().id
                 });
@@ -145,7 +146,8 @@ const drizzleEftified = drizzleEftify.create(queryConnection, {
         try {
             await dbContext.transaction(async trx => {
                 const userRow = await trx.users.insert({
-                    name: 'new user - will be rolled back'
+                    name: 'new user - will be rolled back',
+                    createdAt: new Date()
                 }).returning({
                     id: trx.users.getUnderlyingEntity().id
                 });

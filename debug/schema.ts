@@ -1,11 +1,13 @@
 import { relations } from 'drizzle-orm';
 import { integer, pgTable, text } from 'drizzle-orm/pg-core';
 import { eftifyRelations } from '../src';
+import { pgIntDatetime } from './customTypes/pgIntDatetime';
 
 // ==================== USERS ====================
 export const users = pgTable('users', {
     id: integer('id').primaryKey().generatedAlwaysAsIdentity({ name: 'users_id_seq' }),
     name: text('name'),
+    createdAt: pgIntDatetime('created_at').notNull()
 });
 
 export const usersRelations = eftifyRelations(users, ({ one, many, manyCustomDefined }) => ({
