@@ -66,6 +66,7 @@ export class DbCollectionQueryable<TSelection extends SelectedFields<any, any>> 
 
 		const joinDeclaration: EftifyCollectionJoinDeclaration = {
 			columnName: columnName,
+			selectedColumns: this._baseQuery._.selectedFields,
 			isCollectionDeclaration: true,
 			sql: retQuery,
 			id: id,

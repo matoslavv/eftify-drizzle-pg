@@ -39,6 +39,7 @@ export const posts = pgTable('posts', {
     id: integer('id').primaryKey().generatedAlwaysAsIdentity({ name: 'posts_id_seq' }),
     content: text('content'),
     authorId: integer('author_id'),
+    createdAt: pgIntDatetime('created_at').notNull()
 });
 export const postsRelations = relations(posts, ({ one }) => ({
     author: one(users, {

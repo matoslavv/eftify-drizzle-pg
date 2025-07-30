@@ -17,6 +17,10 @@ export class DbQueryCommon {
 						callingEntity: null,
 						childEntity: null,
 						relation: null,
+						formatColumns: {
+							fieldName: name,
+							selection: (field as EftifyCollectionJoinDeclaration).selectedColumns
+						},
 						uniqueKey: (field as EftifyCollectionJoinDeclaration).id + (field as EftifyCollectionJoinDeclaration).columnName,
 						joinDeclaration: {
 							sql: (field as EftifyCollectionJoinDeclaration).sql,
@@ -45,7 +49,11 @@ export class DbQueryCommon {
 			if (is(field, Column)) {
 				if (field.name != name && fixColumnNames) {
 					if (!DbEftifyConfig.pgForAliasedColumnsReturnDateAsUTC) {
-						fields[name] = sql`${field}`.as(`${name}`)
+						fields[name] = sql`${field}`.as(`${name}`);
+
+						if ((field as any)._origCol == null) {
+							fields[name]._origCol = field;
+						}
 					} else {
 						if (field.getSQLType() != 'timestamp with time zone') {
 							fields[name] = sql`${field}`.as(`${name}`)
@@ -191,5 +199,67 @@ export class DbQueryCommon {
 	/** @internal */
 	static getTraceMessage(queryType: 'firstOrDefault' | 'toList'): string {
 		return `Executing query ${queryType}, query ID: q${new Date().getTime()}`
+	}
+
+	static setFormatColumnsOnBaseQuery(instance: any, select: any, relationArr: DbQueryRelation[]) {
+		(select as any)._formatCollections = relationArr.filter(p => p.formatColumns != null).map(p => p.formatColumns);
+	}
+
+	static mapCollectionValuesFromDriver(formatCollections: any[], result: any[]) {
+		if (formatCollections?.length > 0) {
+			const decoderCache = new Map<string, any>();
+
+			for (const item of result) {
+				for (const formatField of formatCollections) {
+					const collectionField = item[formatField.fieldName];
+					for (const collectionItem of collectionField) {
+						for (let [name, field] of Object.entries(collectionItem)) {
+							if (field == null) {
+								continue;
+							}
+
+							let decoder = decoderCache.get(formatField.fieldName + '-' + name);
+							if (decoder != null) {
+								collectionItem[name] = decoder(field);
+								continue;
+							}
+
+							const selectionField = formatField.selection[name];
+							decoder = selectionField?.mapFromDriverValue;
+							if (decoder != null) {
+								decoderCache.set(formatField.fieldName + '-' + name, decoder);
+								collectionItem[name] = decoder(field);
+								continue;
+							}
+
+							if (selectionField?._origCol?.mapFromDriverValue != null) {
+								decoder = (val: any) => selectionField._origCol.mapFromDriverValue.call(selectionField._origCol, val);
+								decoderCache.set(formatField.fieldName + '-' + name, decoder);
+								collectionItem[name] = decoder(field);
+								continue;
+							}
+
+							if (selectionField?.decoder != null) {
+								decoder = selectionField.decoder.mapFromDriverValue;
+								if (decoder != null) {
+									decoderCache.set(formatField.fieldName + '-' + name, decoder);
+									collectionItem[name] = decoder(field);
+									continue;
+								}
+							}
+
+							if (selectionField?.sql?.decoder != null) {
+								decoder = selectionField.sql.decoder.mapFromDriverValue;
+								if (decoder != null) {
+									decoderCache.set(formatField.fieldName + '-' + name, decoder);
+									collectionItem[name] = decoder(field);
+									continue;
+								}
+							}
+						}
+					}
+				}
+			}
+		}
 	}
 }

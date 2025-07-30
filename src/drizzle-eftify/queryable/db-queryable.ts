@@ -91,9 +91,12 @@ export class DbQueryable<TSelection extends SelectedFields<any, any>> {
 			console.time(msg);
 			const resultArr = await this._baseQuery.limit(1).execute();
 			console.timeEnd(msg);
+			DbQueryCommon.mapCollectionValuesFromDriver(this._baseQuery._formatCollections, resultArr);
 			return resultArr[0];
 		} else {
-			return (await this._baseQuery.limit(1).execute())[0];
+			const resultArr = await this._baseQuery.limit(1).execute();
+			DbQueryCommon.mapCollectionValuesFromDriver(this._baseQuery._formatCollections, resultArr);
+			return resultArr[0];
 		}
 	}
 
@@ -103,9 +106,12 @@ export class DbQueryable<TSelection extends SelectedFields<any, any>> {
 			console.time(msg);
 			const retVal = await this._baseQuery;
 			console.timeEnd(msg);
+			DbQueryCommon.mapCollectionValuesFromDriver(this._baseQuery._formatCollections, retVal);
 			return retVal;
 		} else {
-			return await this._baseQuery;
+			const retVal = await this._baseQuery;
+			DbQueryCommon.mapCollectionValuesFromDriver(this._baseQuery._formatCollections, retVal);
+			return retVal;
 		}
 	}
 

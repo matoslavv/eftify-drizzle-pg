@@ -8,7 +8,9 @@ const pgIntDatetimeImpl = customType<{
     columnType: 'number';
 }>({
     dataType: () => 'integer',
-    fromDriver: value => new Date((value + CUSTOM_EPOCH) * 1000),
+    fromDriver: function (value) {
+        return new Date((value + CUSTOM_EPOCH) * 1000);
+    },
     toDriver: (value) => {
         // Convert Date to seconds since custom epoch
         const timestampInSeconds = Math.floor(value.getTime() / 1000);

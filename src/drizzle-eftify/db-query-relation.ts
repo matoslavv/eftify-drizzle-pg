@@ -6,6 +6,7 @@ export interface DbQueryRelation {
 	childEntity: DbEntity<any, any>
 	uniqueKey: string
 	relation: DbQueryRelationRecord
+	formatColumns?: { fieldName: string, selection: any },
 	joinDeclaration?: { sql: SQL, isLateral: boolean }
 }
 
