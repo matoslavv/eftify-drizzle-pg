@@ -56,6 +56,17 @@ export class DbQueryable<TSelection extends SelectedFields<any, any>> {
 		return new DbQueryable(this._db, select, this._level + 1)
 	}
 
+	selectDistinct<TResult extends SelectedFields<any, any>>(
+		selector: (value: TSelection) => TResult
+	): DbQueryable<TResult> {
+		const subquery = this.buildSubquery()
+		const columns = selector(subquery)
+		DbQueryCommon.ensureColumnAliased(columns, false, null)
+		let select = this._db.selectDistinct(columns).from(subquery)
+
+		return new DbQueryable(this._db, select, this._level + 1)
+	}
+
 	groupBy<TResult extends SelectedFields<any, any>>(selector: (value: TSelection) => TResult) {
 		const subquery = this.buildSubquery();
 		const groupColumns = selector(subquery);

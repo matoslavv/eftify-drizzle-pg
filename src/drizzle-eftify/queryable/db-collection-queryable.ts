@@ -43,6 +43,15 @@ export class DbCollectionQueryable<TSelection extends SelectedFields<any, any>> 
 		return new DbCollectionQueryable(this._db, select, this._level + 1)
 	}
 
+	selectDistinct<TResult extends SelectedFields<any, any>>(selector: (value: TSelection) => TResult) {
+		const subquery = this.buildSubquery()
+		const columns = selector(subquery)
+		DbQueryCommon.ensureColumnAliased(columns, true, null)
+		let select = this._db.selectDistinct(columns).from(subquery)
+
+		return new DbCollectionQueryable(this._db, select, this._level + 1)
+	}
+
 	toList(columnName: string): SQL<SelectResult<TSelection, 'multiple', any>[]> {
 		const seq = counter++
 		const id = `fnlsq${seq}`
