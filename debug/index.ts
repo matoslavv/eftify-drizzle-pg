@@ -153,6 +153,19 @@ const drizzleEftified = drizzleEftify.create(queryConnection, {
 
                 return { id: userRow[0].id };
             });
+
+            //Performs bulk update updating only the "name" field
+            const userRowsBulkUpsert = await dbContext.users.upsertBulk([
+                { id: 1, name: `name changed upsert ${new Date().getTime()}`, createdAt: new Date() },
+                { id: 2, name: `name changed upsert ${new Date().getTime()}`, createdAt: new Date() }
+            ], {
+                updateColumns: [
+                    dbContext.users.getUnderlyingEntity().name
+                ]
+            });
+
+            const z = "ok";
+
         } catch (error) {
             console.error(error);
         }

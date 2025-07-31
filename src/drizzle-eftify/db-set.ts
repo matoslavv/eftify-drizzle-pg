@@ -1,4 +1,5 @@
 import {
+	Column,
 	InferInsertModel,
 	InferModelFromColumns,
 	InferSelectModel,
@@ -6,15 +7,17 @@ import {
 	SelectedFields,
 	Table,
 	ValueOrArray,
-	and
+	and,
+	sql
 } from 'drizzle-orm'
-import { AnyPgColumn, AnyPgTable } from 'drizzle-orm/pg-core'
+import { AnyPgColumn, AnyPgTable, IndexColumn } from 'drizzle-orm/pg-core'
 import { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import { DbContext } from './db-context'
 import { DbEntity } from './db-entity'
 import { DbQueryCommon } from './db-query-common'
 import { DbQueryRelation } from './db-query-relation'
 import { DbQueryable } from './queryable/db-queryable'
+import { PgColumn } from 'drizzle-orm/pg-core'
 
 export type EftifyUpdateModel<TTable extends Table, TConfig extends {
 	dbColumnNames: boolean;
@@ -160,6 +163,10 @@ export class DbSet<TDataModel extends any, TTable extends AnyPgTable, TEntity ex
 
 	insertBulk(value: EftifyInsertModel<TTable> | EftifyInsertModel<TTable>[], insertConfig?: InsertConfig): ReturnType<this['insert']> {
 		let baseBuilder: any = this.db.insert(this._entity.table as any);
+		if (insertConfig?.overridingSystemValue) {
+			baseBuilder = baseBuilder.overridingSystemValue();
+		}
+
 		if (Array.isArray(value) && (value as any[]).length > (insertConfig?.chunkSize ?? 700)) {
 			let chunkSize = insertConfig?.chunkSize;
 			if (chunkSize == null) {
@@ -175,6 +182,66 @@ export class DbSet<TDataModel extends any, TTable extends AnyPgTable, TEntity ex
 		}
 
 		return baseBuilder;
+	}
+
+	upsertBulk(values: EftifyInsertModel<TTable>[], config?: UpsertConfig) {
+		const referenceItem = config?.referenceItem || values[0];
+		const table = this.getUnderlyingEntity().table;
+		const columns = (table as any)[(Table as any).Symbol.Columns];
+		let columnFilter = config?.updateColumnFilter;
+		if (columnFilter == null) {
+			if (config?.updateColumns != null) {
+				const colIds = config.updateColumns.map(p => p.name);
+				columnFilter = function (colId: string) { return colIds.includes(colId) };
+			} else {
+				columnFilter = function (colId: string) { return true; };
+			}
+		}
+
+		let primaryKey = config?.primaryKey;
+		if (primaryKey == null) {
+			primaryKey = [];
+			for (let [name, field] of Object.entries(columns)) {
+				if ((field as PgColumn).primary) {
+					primaryKey.push(field as PgColumn);
+				}
+			}
+		}
+
+		if (!Array.isArray(primaryKey)) {
+			primaryKey = [primaryKey];
+		}
+
+		let overridingSystemValue = config?.overridingSystemValue;
+		if (overridingSystemValue == null) {
+			for (let [name, field] of Object.entries(referenceItem)) {
+				const col = columns[name];
+				if (col?.primary) {
+					overridingSystemValue = true;
+					break;
+				}
+			}
+			Object.keys(referenceItem)
+		}
+
+		const primaryKeyNames = primaryKey.map(p => p.name);
+		const insertConfig: InsertConfig = {
+			chunkSize: config?.chunkSize,
+			overridingSystemValue
+		};
+
+		return this.insertBulk(values, insertConfig).onConflictDoUpdate({
+			target: primaryKey,
+			set: Object.fromEntries(Object.keys(referenceItem)
+				.filter(k => !primaryKeyNames.includes(k) && columnFilter(k))
+				.map((k) => {
+					const column = (columns as any)[k];
+					return [
+						column.name,
+						sql`excluded.${sql.identifier(column.name)}`,
+					];
+				})),
+		});
 	}
 
 	update(value: EftifyUpdateModel<TTable>) {
@@ -245,7 +312,46 @@ export class DbSet<TDataModel extends any, TTable extends AnyPgTable, TEntity ex
 
 
 interface InsertConfig {
+	/**
+	 * Size of insert chunk, if not provided, it will be auto-detected based on default max PG query parameters limit
+	 */
 	chunkSize?: number
+	overridingSystemValue?: boolean
+}
+
+interface UpsertConfig {
+	/**
+	 * Size of insert chunk, if not provided, it will be auto-detected based on default max PG query parameters limit
+	 */
+	chunkSize?: number
+
+	/**
+	 * Primary key columns, these are columns where conflict is detected. If not specified, table's primary keys wil lbe taken into account
+	 */
+	primaryKey?: IndexColumn | IndexColumn[]
+
+	/**
+	 * Set as true when perforing upsert as a trick for bulk update. If not specified correct value will be auto-detected
+	 */
+	overridingSystemValue?: boolean
+
+	targetWhere?: SQL;
+	setWhere?: SQL;
+
+	/**
+	 * Reference item based on which columns are detected. If not specified, first value from the insert array is used instead
+	 */
+	referenceItem?: any
+
+	/**
+	 * List of columns that should be updated in case of conflict. If not specified All fields from the reference besides primaryKeys are updated. For advanced filtering you may use {@link UpsertConfig.updateColumnFilter}
+	 */
+	updateColumns?: Column[]
+
+	/**
+	 * Filter method to determine if column should be updated in case of conflict
+	 */
+	updateColumnFilter?: (colId: string) => boolean
 }
 
 interface IInsertChunkWrapper {
