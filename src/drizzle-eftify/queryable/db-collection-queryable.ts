@@ -35,20 +35,24 @@ export class DbCollectionQueryable<TSelection extends SelectedFields<any, any>> 
 	}
 
 	select<TResult extends SelectedFields<any, any>>(selector: (value: TSelection) => TResult) {
-		const subquery = this.buildSubquery()
-		const columns = selector(subquery)
+		const subquery = this.buildSubquery();
+		DbQueryCommon.restoreSubqueryFormatColumnsFromBaseQuery(this._baseQuery, subquery);
+		const columns = selector(subquery);
 		DbQueryCommon.ensureColumnAliased(columns, true, null)
 		let select = this._db.select(columns).from(subquery)
 
+		DbQueryCommon.setFormatColumnsOnBaseQuery(this, select, columns);
 		return new DbCollectionQueryable(this._db, select, this._level + 1)
 	}
 
 	selectDistinct<TResult extends SelectedFields<any, any>>(selector: (value: TSelection) => TResult) {
-		const subquery = this.buildSubquery()
+		const subquery = this.buildSubquery();
+		DbQueryCommon.restoreSubqueryFormatColumnsFromBaseQuery(this._baseQuery, subquery);
 		const columns = selector(subquery)
 		DbQueryCommon.ensureColumnAliased(columns, true, null)
 		let select = this._db.selectDistinct(columns).from(subquery)
 
+		DbQueryCommon.setFormatColumnsOnBaseQuery(this, select, columns);
 		return new DbCollectionQueryable(this._db, select, this._level + 1)
 	}
 
@@ -66,7 +70,10 @@ export class DbCollectionQueryable<TSelection extends SelectedFields<any, any>> 
 
 		const joinDeclaration: EftifyCollectionJoinDeclaration = {
 			columnName: columnName,
-			selectedColumns: this._baseQuery._.selectedFields,
+			mapFromDriverDefinition: {
+				selectedColumns: this._baseQuery._.selectedFields,
+				childSelections: this._baseQuery._formatCollections
+			},
 			isCollectionDeclaration: true,
 			sql: retQuery,
 			id: id,

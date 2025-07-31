@@ -37,7 +37,8 @@ export class DbQueryCommon {
 
 				fields[name].eftifyFormatColumn = {
 					fieldName: name,
-					selection: (field as EftifyCollectionJoinDeclaration).selectedColumns
+					selection: (field as EftifyCollectionJoinDeclaration).mapFromDriverDefinition.selectedColumns,
+					childSelections: (field as EftifyCollectionJoinDeclaration).mapFromDriverDefinition.childSelections
 				}
 
 				field = fields[name];
@@ -211,7 +212,8 @@ export class DbQueryCommon {
 			if (eftifyCol != null) {
 				formatCollection.push({
 					fieldName: name,
-					selection: eftifyCol.selection
+					selection: eftifyCol.selection,
+					childSelections: eftifyCol.childSelections
 				});
 			}
 		}
@@ -227,20 +229,35 @@ export class DbQueryCommon {
 		}
 	}
 
-	static mapCollectionValuesFromDriver(formatCollections: any[], result: any[]) {
+	static mapCollectionValuesFromDriver(formatCollections: any[], result: any[], decoderCache?: Map<string, any>, keyPrefix?: string) {
 		if (formatCollections?.length > 0) {
-			const decoderCache = new Map<string, any>();
+			if (decoderCache == null) {
+				decoderCache = new Map<string, any>();
+			}
+
+			if (keyPrefix == null) {
+				keyPrefix = '';
+			}
 
 			for (const item of result) {
 				for (const formatField of formatCollections) {
 					const collectionField = item[formatField.fieldName];
+					const hasChildren = formatField.childSelections?.length > 0;
+
 					for (const collectionItem of collectionField) {
+						if (hasChildren) {
+							const colItemArr = [collectionItem];
+							for (const childSelection of formatField.childSelections) {
+								DbQueryCommon.mapCollectionValuesFromDriver([childSelection], colItemArr, decoderCache, keyPrefix + '-' + formatField.fieldName + childSelection.fieldName);
+							}
+						}
+
 						for (let [name, field] of Object.entries(collectionItem)) {
 							if (field == null) {
 								continue;
 							}
 
-							let decoder = decoderCache.get(formatField.fieldName + '-' + name);
+							let decoder = decoderCache.get(keyPrefix + formatField.fieldName + '-' + name);
 							if (decoder != null) {
 								collectionItem[name] = decoder(field);
 								continue;
@@ -249,14 +266,14 @@ export class DbQueryCommon {
 							const selectionField = formatField.selection[name];
 							decoder = selectionField?.mapFromDriverValue;
 							if (decoder != null) {
-								decoderCache.set(formatField.fieldName + '-' + name, decoder);
+								decoderCache.set(keyPrefix + formatField.fieldName + '-' + name, decoder);
 								collectionItem[name] = decoder(field);
 								continue;
 							}
 
 							if (selectionField?._origCol?.mapFromDriverValue != null) {
 								decoder = (val: any) => selectionField._origCol.mapFromDriverValue.call(selectionField._origCol, val);
-								decoderCache.set(formatField.fieldName + '-' + name, decoder);
+								decoderCache.set(keyPrefix + formatField.fieldName + '-' + name, decoder);
 								collectionItem[name] = decoder(field);
 								continue;
 							}
@@ -264,7 +281,7 @@ export class DbQueryCommon {
 							if (selectionField?.decoder != null) {
 								decoder = selectionField.decoder.mapFromDriverValue;
 								if (decoder != null) {
-									decoderCache.set(formatField.fieldName + '-' + name, decoder);
+									decoderCache.set(keyPrefix + formatField.fieldName + '-' + name, decoder);
 									collectionItem[name] = decoder(field);
 									continue;
 								}
@@ -273,7 +290,7 @@ export class DbQueryCommon {
 							if (selectionField?.sql?.decoder != null) {
 								decoder = selectionField.sql.decoder.mapFromDriverValue;
 								if (decoder != null) {
-									decoderCache.set(formatField.fieldName + '-' + name, decoder);
+									decoderCache.set(keyPrefix + formatField.fieldName + '-' + name, decoder);
 									collectionItem[name] = decoder(field);
 									continue;
 								}

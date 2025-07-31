@@ -41,10 +41,25 @@ export const posts = pgTable('posts', {
     authorId: integer('author_id'),
     createdAt: pgIntDatetime('created_at').notNull()
 });
-export const postsRelations = relations(posts, ({ one }) => ({
+export const postsRelations = relations(posts, ({ one, many }) => ({
+    postComments: many(postComments),
     author: one(users, {
         fields: [posts.authorId],
         references: [users.id],
+    }),
+}));
+
+// ==================== POST COMMENTS ====================
+export const postComments = pgTable('post_comments', {
+    id: integer('id').primaryKey().generatedAlwaysAsIdentity({ name: 'post_comments_id_seq' }),
+    content: text('content'),
+    postId: integer('post_id'),
+    createdAt: pgIntDatetime('created_at').notNull()
+});
+export const postCommentsRelations = relations(postComments, ({ one }) => ({
+    post: one(posts, {
+        fields: [postComments.postId],
+        references: [posts.id],
     }),
 }));
 

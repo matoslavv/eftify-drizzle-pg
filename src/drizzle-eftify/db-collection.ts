@@ -91,7 +91,8 @@ export class DbCollection<TEntity extends DbEntity<any, AnyPgTable>> {
 		this._entity.unsubscribeNavigation()
 
 		let select = this.createQuery(columns)
-		select = DbQueryCommon.buildRelations(select, relationArr)
+		select = DbQueryCommon.buildRelations(select, relationArr);
+		DbQueryCommon.setFormatColumnsOnBaseQuery(this, select, columns);
 		return new DbCollectionQueryable(db, select, 1)
 	}
 
