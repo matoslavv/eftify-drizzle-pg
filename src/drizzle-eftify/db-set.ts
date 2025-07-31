@@ -243,7 +243,7 @@ export class DbSet<TDataModel extends any, TTable extends AnyPgTable, TEntity ex
 				.map((k) => {
 					const column = (columns as any)[k];
 					return [
-						column.name,
+						k as any,
 						sql`excluded.${sql.identifier(column.name)}`,
 					];
 				})),
