@@ -191,7 +191,13 @@ export class DbSet<TDataModel extends any, TTable extends AnyPgTable, TEntity ex
 		let columnFilter = config?.updateColumnFilter;
 		if (columnFilter == null) {
 			if (config?.updateColumns != null) {
-				const colIds = config.updateColumns.map(p => p.name);
+				const colIds: string[] = [];
+				for (let [name, field] of Object.entries(columns)) {
+					if (config.updateColumns.includes(field as any)) {
+						colIds.push(name);
+					}
+				}
+
 				columnFilter = function (colId: string) { return colIds.includes(colId) };
 			} else {
 				columnFilter = function (colId: string) { return true; };
