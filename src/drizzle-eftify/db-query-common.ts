@@ -202,15 +202,29 @@ export class DbQueryCommon {
 		return `Executing query ${queryType}, query ID: q${new Date().getTime()}`
 	}
 
+
+
 	static setFormatColumnsOnBaseQuery(instance: any, select: any, columns: any) {
 		const formatCollection = [];
 		for (let [name, field] of Object.entries(columns)) {
-			if ((field as any).eftifyFormatColumn != null) {
-				formatCollection.push((field as any).eftifyFormatColumn);
+			const eftifyCol = (field as any).eftifyFormatColumn ?? (field as any).sql?.eftifyFormatColumn;
+			if (eftifyCol != null) {
+				formatCollection.push({
+					fieldName: name,
+					selection: eftifyCol.selection
+				});
 			}
 		}
 
 		(select as any)._formatCollections = formatCollection;
+	}
+
+	static restoreSubqueryFormatColumnsFromBaseQuery(baseQuery: any, subquery: any) {
+		if (baseQuery._formatCollections?.length > 0) {
+			for (const formatter of baseQuery._formatCollections) {
+				subquery[formatter.fieldName].sql.eftifyFormatColumn = formatter;
+			}
+		}
 	}
 
 	static mapCollectionValuesFromDriver(formatCollections: any[], result: any[]) {

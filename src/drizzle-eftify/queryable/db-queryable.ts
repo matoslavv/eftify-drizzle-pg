@@ -48,11 +48,13 @@ export class DbQueryable<TSelection extends SelectedFields<any, any>> {
 	select<TResult extends SelectedFields<any, any>>(
 		selector: (value: TSelection) => TResult
 	): DbQueryable<TResult> {
-		const subquery = this.buildSubquery()
+		const subquery = this.buildSubquery();
+		DbQueryCommon.restoreSubqueryFormatColumnsFromBaseQuery(this._baseQuery, subquery);
 		const columns = selector(subquery)
 		DbQueryCommon.ensureColumnAliased(columns, false, null)
 		let select = this._db.select(columns).from(subquery)
 
+		DbQueryCommon.setFormatColumnsOnBaseQuery(this, select, columns);
 		return new DbQueryable(this._db, select, this._level + 1)
 	}
 
@@ -60,10 +62,12 @@ export class DbQueryable<TSelection extends SelectedFields<any, any>> {
 		selector: (value: TSelection) => TResult
 	): DbQueryable<TResult> {
 		const subquery = this.buildSubquery()
+		DbQueryCommon.restoreSubqueryFormatColumnsFromBaseQuery(this._baseQuery, subquery);
 		const columns = selector(subquery)
 		DbQueryCommon.ensureColumnAliased(columns, false, null)
 		let select = this._db.selectDistinct(columns).from(subquery)
 
+		DbQueryCommon.setFormatColumnsOnBaseQuery(this, select, columns);
 		return new DbQueryable(this._db, select, this._level + 1)
 	}
 

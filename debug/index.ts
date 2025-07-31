@@ -51,7 +51,10 @@ const drizzle2 =
                     text: p.content,
                     createdAt: p.createdAt
                 })).toList('posts')
-            })).toList();
+            })).select(p => ({
+                id: p.id,
+                postery: p.posts
+            })).toList()
 
             //Queries list
             const userList = await dbContext.users.where(p => lt(p.id, 90)).select(p => ({
