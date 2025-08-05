@@ -52,7 +52,8 @@ describe('index test', () => {
 
 	it('insert name successfully', async () => {
 		const [userRow] = await db.users.insert({
-			name: 'test user'
+			name: 'test user',
+			createdAt: new Date()
 		});
 
 		const users = await db.users.toList();
@@ -62,7 +63,8 @@ describe('index test', () => {
 
 	it('get all users', async () => {
 		const dummyUsers = Array.from({ length: 10 }, (_, i) => ({
-			name: `test user ${i + 1}`
+			name: `test user ${i + 1}`,
+			createdAt: new Date()
 		}));
 
 		await db.users.insert(dummyUsers);
@@ -76,7 +78,8 @@ describe('index test', () => {
 
 	it('get user by ID successfully', async () => {
 		const [userRow] = await db.users.insert({
-			name: 'test user to get'
+			name: 'test user to get',
+			createdAt: new Date()
 		}).returning({
 			id: schema.users.id
 		});
@@ -88,7 +91,8 @@ describe('index test', () => {
 
 	it('fails to get user by ID with incorrect ID', async () => {
 		const [userRow] = await db.users.insert({
-			name: 'test user to get'
+			name: 'test user to get',
+			createdAt: new Date()
 		}).returning({
 			id: schema.users.id
 		});
@@ -99,7 +103,8 @@ describe('index test', () => {
 
 	it('delete user by ID successfully', async () => {
 		const [userRow] = await db.users.insert({
-			name: 'test user to delete'
+			name: 'test user to delete',
+			createdAt: new Date()
 		});
 
 		const usersBeforeDelete = await db.users.toList();
@@ -113,7 +118,8 @@ describe('index test', () => {
 
 	it('fails to delete user by ID with incorrect ID', async () => {
 		const [userRow] = await db.users.insert({
-			name: 'test user to delete'
+			name: 'test user to delete',
+			createdAt: new Date()
 		});
 
 		const usersBeforeDelete = await db.users.toList();
@@ -128,7 +134,8 @@ describe('index test', () => {
 
 	it('update user name successfully', async () => {
 		const [userRow] = await db.users.insert({
-			name: 'test user to update'
+			name: 'test user to update',
+			createdAt: new Date()
 		});
 
 		const usersBeforeUpdate = await db.users.toList();
@@ -145,7 +152,8 @@ describe('index test', () => {
 
 	it('fails to update user name with incorrect ID', async () => {
 		const [userRow] = await db.users.insert({
-			name: 'test user to update'
+			name: 'test user to update',
+			createdAt: new Date()
 		});
 
 		const usersBeforeUpdate = await db.users.toList();
@@ -162,14 +170,16 @@ describe('index test', () => {
 
 	it('creates a post with author successfully', async () => {
 		const [userRow] = await db.users.insert({
-			name: 'test user for post'
+			name: 'test user for post',
+			createdAt: new Date()
 		}).returning({
 			id: schema.users.id
 		});
 
 		const [postRow] = await db.posts.insert({
 			content: 'post content with author',
-			authorId: userRow.id
+			authorId: userRow.id,
+			createdAt: new Date()
 		}).returning();
 
 		expect(postRow.content).toBe('post content with author');
@@ -178,7 +188,8 @@ describe('index test', () => {
 
 	it('creates a post without author successfully', async () => {
 		const [postRow] = await db.posts.insert({
-			content: 'post content without author'
+			content: 'post content without author',
+			createdAt: new Date()
 		}).returning();
 
 		expect(postRow.content).toBe('post content without author');
@@ -187,30 +198,35 @@ describe('index test', () => {
 
 	it('gets posts with specific author successfully', async () => {
 		const [userRow1] = await db.users.insert({
-			name: 'test user1'
+			name: 'test user1',
+			createdAt: new Date()
 		}).returning({
 			id: schema.users.id
 		});
 
 		const [userRow2] = await db.users.insert({
-			name: 'test user2'
+			name: 'test user2',
+			createdAt: new Date()
 		}).returning({
 			id: schema.users.id
 		});
 
 		const [postRow1] = await db.posts.insert({
 			content: 'post content with author1',
-			authorId: userRow1.id
+			authorId: userRow1.id,
+			createdAt: new Date()
 		});
 
 		const [postRow2] = await db.posts.insert({
 			content: 'post content with author1',
-			authorId: userRow1.id
+			authorId: userRow1.id,
+			createdAt: new Date()
 		});
 
 		const [postRow3] = await db.posts.insert({
 			content: 'post content with author2',
-			authorId: userRow2.id
+			authorId: userRow2.id,
+			createdAt: new Date()
 		});
 
 		const query = db.posts;
@@ -224,30 +240,35 @@ describe('index test', () => {
 
 	it('gets users with their posts successfully', async () => {
 		const [userRow1] = await db.users.insert({
-			name: 'test user1'
+			name: 'test user1',
+			createdAt: new Date()
 		}).returning({
 			id: schema.users.id
 		});
 
 		const [userRow2] = await db.users.insert({
-			name: 'test user2'
+			name: 'test user2',
+			createdAt: new Date()
 		}).returning({
 			id: schema.users.id
 		});
 
 		const [postRow1] = await db.posts.insert({
 			content: 'post content with author1',
-			authorId: userRow1.id
+			authorId: userRow1.id,
+			createdAt: new Date()
 		});
 
 		const [postRow2] = await db.posts.insert({
 			content: 'post content with author1',
-			authorId: userRow1.id
+			authorId: userRow1.id,
+			createdAt: new Date()
 		});
 
 		const [postRow3] = await db.posts.insert({
 			content: 'post content with author2',
-			authorId: userRow2.id
+			authorId: userRow2.id,
+			createdAt: new Date()
 		});
 
 		const usersWithposts = await db.users.select(u => ({
@@ -274,7 +295,8 @@ describe('index test', () => {
 
 	it('creates user address successfully', async () => {
 		const [userRow] = await db.users.insert({
-			name: 'test user'
+			name: 'test user',
+			createdAt: new Date()
 		}).returning({
 			id: schema.users.id
 		});
@@ -290,7 +312,8 @@ describe('index test', () => {
 
 	it('assign multiple addresses to a user successfully', async () => {
 		const [userRow] = await db.users.insert({
-			name: 'test user for multiple addresses'
+			name: 'test user for multiple addresses',
+			createdAt: new Date()
 		}).returning({
 			id: schema.users.id
 		});
@@ -310,7 +333,8 @@ describe('index test', () => {
 
 	it('gets user addresses successfully', async () => {
 		const [userRow] = await db.users.insert({
-			name: 'test user for getting addresses'
+			name: 'test user for getting addresses',
+			createdAt: new Date()
 		}).returning({
 			id: schema.users.id
 		});
@@ -330,7 +354,8 @@ describe('index test', () => {
 
 	it('gets user posts through user address successfully (2 levels)', async () => {
 		const [userRow] = await db.users.insert({
-			name: 'test user'
+			name: 'test user',
+			createdAt: new Date()
 		}).returning({
 			id: schema.users.id
 		});
@@ -342,12 +367,14 @@ describe('index test', () => {
 
 		const [postRow1] = await db.posts.insert({
 			content: 'post 1',
-			authorId: userRow.id
+			authorId: userRow.id,
+			createdAt: new Date()
 		}).returning();
 
 		const [postRow2] = await db.posts.insert({
 			content: 'post 2',
-			authorId: userRow.id
+			authorId: userRow.id,
+			createdAt: new Date()
 		}).returning();
 
 		const nestedResults = await db.userAddress.select(p => ({
@@ -366,7 +393,8 @@ describe('index test', () => {
 
 	it('order asc users by name successfully', async () => {
 		const dummyUsers = Array.from({ length: 5 }, (_, i) => ({
-			name: `User ${i + 1}`
+			name: `User ${i + 1}`,
+			createdAt: new Date()
 		}));
 
 		await db.users.insert(dummyUsers);
@@ -378,7 +406,8 @@ describe('index test', () => {
 
 	it('order desc users by name successfully', async () => {
 		const dummyUsers = Array.from({ length: 5 }, (_, i) => ({
-			name: `User ${i + 1}`
+			name: `User ${i + 1}`,
+			createdAt: new Date()
 		}));
 
 		await db.users.insert(dummyUsers);
@@ -390,14 +419,16 @@ describe('index test', () => {
 
 	it('gets author name from post successfully', async () => {
 		const [userRow] = await db.users.insert({
-			name: 'author'
+			name: 'author',
+			createdAt: new Date()
 		}).returning({
 			id: schema.users.id
 		});
 
 		const [postRow] = await db.posts.insert({
 			content: 'post',
-			authorId: userRow.id
+			authorId: userRow.id,
+			createdAt: new Date()
 		}).returning();
 
 		const postWithAuthor = await db.posts.where(p => eq(p.id, postRow.id)).select(p => ({
@@ -411,26 +442,26 @@ describe('index test', () => {
 	});
 
 	it('simple sum of user IDs', async () => {
-		const [userRow1] = await db.users.insert({ name: 'User 1' }).returning({ id: schema.users.id });
-		const [userRow2] = await db.users.insert({ name: 'User 2' }).returning({ id: schema.users.id });
-		const [userRow3] = await db.users.insert({ name: 'User 3' }).returning({ id: schema.users.id });
+		const [userRow1] = await db.users.insert({ name: 'User 1', createdAt: new Date() }).returning({ id: schema.users.id });
+		const [userRow2] = await db.users.insert({ name: 'User 2', createdAt: new Date() }).returning({ id: schema.users.id });
+		const [userRow3] = await db.users.insert({ name: 'User 3', createdAt: new Date() }).returning({ id: schema.users.id });
 
 		const summary = Number(await db.users.sum(p => p.id));
 		expect(summary).toBe(userRow1.id + userRow2.id + userRow3.id);
 	});
 
 	it('count users with where', async () => {
-		const [userRow1] = await db.users.insert({ name: 'User 1' }).returning({ id: schema.users.id });
-		const [userRow2] = await db.users.insert({ name: 'User 2' }).returning({ id: schema.users.id });
-		const [userRow3] = await db.users.insert({ name: 'User 3' }).returning({ id: schema.users.id });
+		const [userRow1] = await db.users.insert({ name: 'User 1', createdAt: new Date() }).returning({ id: schema.users.id });
+		const [userRow2] = await db.users.insert({ name: 'User 2', createdAt: new Date() }).returning({ id: schema.users.id });
+		const [userRow3] = await db.users.insert({ name: 'User 3', createdAt: new Date() }).returning({ id: schema.users.id });
 
 		const userCount = await db.users.where(p => eq(p.id, userRow1.id)).count();
 		expect(userCount).toBe(1);
 	});
 
 	it('group by street and aggregate successfully', async () => {
-		const [userRow1] = await db.users.insert({ name: 'User 1' }).returning({ id: schema.users.id });
-		const [userRow2] = await db.users.insert({ name: 'User 2' }).returning({ id: schema.users.id });
+		const [userRow1] = await db.users.insert({ name: 'User 1', createdAt: new Date() }).returning({ id: schema.users.id });
+		const [userRow2] = await db.users.insert({ name: 'User 2', createdAt: new Date() }).returning({ id: schema.users.id });
 
 		await db.userAddress.insert([
 			{ userId: userRow1.id, address: 'address1' },
@@ -459,7 +490,8 @@ describe('index test', () => {
 		const userRow = await db.transaction(async trx => {
 			try {
 				const userRow = await trx.users.insert({
-					name: 'new user'
+					name: 'new user',
+					createdAt: new Date()
 				}).returning({
 					id: trx.users.getUnderlyingEntity().id
 				});
