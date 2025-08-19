@@ -7,7 +7,8 @@ import { pgIntDatetime } from './customTypes/pgIntDatetime';
 export const users = pgTable('users', {
     id: integer('id').primaryKey().generatedAlwaysAsIdentity({ name: 'users_id_seq' }),
     name: text('name'),
-    createdAt: pgIntDatetime('created_at').notNull()
+    createdAt: pgIntDatetime('created_at').notNull(),
+	state: integer('state').default(1)
 });
 
 export const usersRelations = eftifyRelations(users, ({ one, many, manyCustomDefined }) => ({
