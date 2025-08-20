@@ -4,6 +4,12 @@ import * as schema from './schema';
 import { drizzleEftify } from './../src/';
 import { and, eq, lt, ne, sql } from 'drizzle-orm';
 
+export enum UserStateFlags {
+	Active = 1,
+	Verified = 2,
+	Slave = 4,
+	Banned = 8,
+}
 
 const getDbUrl = () => {
     if (process.env.DB_URL == null || process.env.DB_URL?.toString()?.trim()?.length == 0) {
