@@ -5,7 +5,7 @@ import { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import { AnyPgColumn } from 'drizzle-orm/pg-core'
 import { SelectResult } from 'drizzle-orm/query-builders/select.types'
 import { EftifyCollectionJoinDeclaration } from '../data-contracts'
-import { GroupedDbCollectionQueryable } from '../grouped-db-collection-queryable'
+import { GroupedDbCollectionQueryable } from '../grouping/grouped-db-collection-queryable'
 
 let counter = 0
 
