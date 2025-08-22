@@ -5,6 +5,7 @@ import { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import { AnyPgColumn } from 'drizzle-orm/pg-core'
 import { SelectResult } from 'drizzle-orm/query-builders/select.types'
 import { EftifyCollectionJoinDeclaration } from '../data-contracts'
+import { GroupedDbCollectionQueryable } from '../grouped-db-collection-queryable'
 
 let counter = 0
 
@@ -54,6 +55,23 @@ export class DbCollectionQueryable<TSelection extends SelectedFields<any, any>> 
 
 		DbQueryCommon.setFormatColumnsOnBaseQuery(this, select, columns);
 		return new DbCollectionQueryable(this._db, select, this._level + 1)
+	}
+
+	groupBy<TResult extends SelectedFields<any, any>>(selector: (value: TSelection) => TResult) {
+		const subquery = this.buildSubquery();
+		const groupColumns = selector(subquery);
+		DbQueryCommon.ensureColumnAliased(groupColumns, false, null);
+		type SelectedType = ReturnType<typeof this.createSelect<typeof groupColumns>>;
+		type BaseType = TSelection;
+
+		return new GroupedDbCollectionQueryable(
+			this._db,
+			(null as any) as SelectedType,
+			(this._baseQuery as any) as BaseType,
+			this._level + 1,
+			(groupColumns as any) as SelectedType,
+			subquery
+		)
 	}
 
 	toList(columnName: string): SQL<SelectResult<TSelection, 'multiple', any>[]> {

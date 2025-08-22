@@ -78,7 +78,7 @@ export class DbQueryable<TSelection extends SelectedFields<any, any>> {
 		type SelectedType = ReturnType<typeof this.createSelect<typeof groupColumns>>;
 		type BaseType = TSelection;
 
-		return new GroupedDbQueryable<BaseType, SelectedType, SelectedType>(
+		return new GroupedDbQueryable(
 			this._db,
 			(null as any) as SelectedType,
 			(this._baseQuery as any) as BaseType,
