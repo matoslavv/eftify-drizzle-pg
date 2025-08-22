@@ -199,6 +199,27 @@ const drizzleEftified = drizzleEftify.create(queryConnection, {
         const affectedCount = await dbContext.users.where(p => eq(p.id, 1)).update({
             name: 'changed name'
         });
+
+		const unrelatedRow = await dbContext.unrelatedTable.insert({
+			sometext: "some text"
+		}).returning();
+
+		const user = await dbContext.users.where(p => eq(p.name, "new user bulk1")).firstOrDefault();
+		await dbContext.posts.insert({
+			content: "new post content",
+			authorId: user.id,
+			unrelatedId: unrelatedRow[0].id,
+			createdAt: new Date()
+		});
+
+		const nestedObject = await dbContext.users.where(p => eq(p.name, "new user bulk1")).select(p => ({
+			posts: p.posts.select(post => ({
+				subqueryUnrelated: {
+					id: post.unrelatedTable.id,
+					sometext: post.unrelatedTable.sometext
+				},
+			})),
+		})).firstOrDefault();
     } catch (error) {
         const pica = error;
     }
