@@ -14,16 +14,16 @@ export default class GroupedDbItem<TGroupingKey extends SelectedFields<any, any>
         this._level = level
     }
 
-    count(): SQL.Aliased<number> {
-        return sql`count(${this.getFirstField()})`.as(`cnt${this._level}${this._counter++}`) as any
+    count(colAlias?: string): SQL.Aliased<number> {
+        return sql`count(${this.getFirstField()})`.as(colAlias ?? `cnt${this._level}${this._counter++}`) as any
     }
 
-    sum(builder: (aliases: TOriginalQuery) => ValueOrArray<AnyPgColumn | SQL | SQL.Aliased>): SQL.Aliased<number> {
-        return sql<number>`sum(${builder(this._subquery)})`.as(`sum${this._level}${this._counter++}`) as any
+    sum(builder: (aliases: TOriginalQuery) => ValueOrArray<AnyPgColumn | SQL | SQL.Aliased>, colAlias?: string): SQL.Aliased<number> {
+        return sql<number>`sum(${builder(this._subquery)})`.as(colAlias ?? `sum${this._level}${this._counter++}`) as any
     }
 
-    min(builder: (aliases: TOriginalQuery) => ValueOrArray<AnyPgColumn | SQL | SQL.Aliased>): SQL.Aliased<number> {
-        return sql<number>`min(${builder(this._subquery)})`.as(`min${this._level}${this._counter++}`) as any
+    min(builder: (aliases: TOriginalQuery) => ValueOrArray<AnyPgColumn | SQL | SQL.Aliased>, colAlias?: string): SQL.Aliased<number> {
+        return sql<number>`min(${builder(this._subquery)})`.as(colAlias ?? `min${this._level}${this._counter++}`) as any
     }
 
     get key(): TGroupingKey {
