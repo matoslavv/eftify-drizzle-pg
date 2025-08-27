@@ -8,11 +8,6 @@ declare function createTableRelationsHelpersEftify<TTableName extends string>(so
         tableName: TTableName;
     }>, ...AnyColumn<{
         tableName: TTableName;
-    }>[]]>(table: TForeignTable, config?: RelationConfig<TTableName, TForeignTable["_"]["name"], TColumns> | undefined) => One<TForeignTable["_"]["name"], Equal<TColumns[number]["_"]["notNull"], true>>;
-    oneCustomDefined: <TForeignTable extends Table, TColumns extends [AnyColumn<{
-        tableName: TTableName;
-    }>, ...AnyColumn<{
-        tableName: TTableName;
     }>[]]>(table: TForeignTable, config?: CustomRelationConfig<TTableName, TForeignTable["_"]["name"], TColumns> | undefined) => One<TForeignTable["_"]["name"], Equal<TColumns[number]["_"]["notNull"], true>>;
     many: <TForeignTable extends Table>(referencedTable: TForeignTable, config?: {
         relationName: string;
@@ -157,6 +152,8 @@ export function eftifyRelations<TTableName extends string, TRelations extends Re
     name: TTableName;
 }>, relationConfig: (helpers: EftifyTableRelationsHelpers<TTableName> & { cust: string }) => TRelations): Relations<TTableName, TRelations> {
     return (relations as typeof eftifyRelations)(table, (helpers) => {
+        const oldOne = helpers.one;
+
         (helpers as any).manyFromKeyArray = (table: any, config: any) => {
             if (config == null) {
                 config = {};
@@ -175,8 +172,8 @@ export function eftifyRelations<TTableName extends string, TRelations extends Re
             return ManyCustomDefined.createFromConfig(helpers, table, config);
         };
 
-        (helpers as any).oneCustomDefined = (table: any, config: any) => {
-            const builtObj: any = helpers.one(table, config);
+        (helpers as any).one = (table: any, config: any) => {
+            const builtObj: any = oldOne(table, config);
             if (config.mandatory == null) {
                 return builtObj;
             }
