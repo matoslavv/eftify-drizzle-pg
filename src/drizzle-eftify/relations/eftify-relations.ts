@@ -9,6 +9,11 @@ declare function createTableRelationsHelpersEftify<TTableName extends string>(so
     }>, ...AnyColumn<{
         tableName: TTableName;
     }>[]]>(table: TForeignTable, config?: RelationConfig<TTableName, TForeignTable["_"]["name"], TColumns> | undefined) => One<TForeignTable["_"]["name"], Equal<TColumns[number]["_"]["notNull"], true>>;
+    oneCustomDefined: <TForeignTable extends Table, TColumns extends [AnyColumn<{
+        tableName: TTableName;
+    }>, ...AnyColumn<{
+        tableName: TTableName;
+    }>[]]>(table: TForeignTable, config?: CustomRelationConfig<TTableName, TForeignTable["_"]["name"], TColumns> | undefined) => One<TForeignTable["_"]["name"], Equal<TColumns[number]["_"]["notNull"], true>>;
     many: <TForeignTable extends Table>(referencedTable: TForeignTable, config?: {
         relationName: string;
     }) => Many<TForeignTable["_"]["name"]>;
@@ -106,6 +111,46 @@ class ManyCustomDefined<
     }
 }
 
+export interface CustomRelationConfig<TTableName extends string, TForeignTableName extends string, TColumns extends AnyColumn<{
+    tableName: TTableName;
+}>[]> extends RelationConfig<TTableName, TForeignTableName, TColumns> {
+    mandatory?: boolean
+}
+
+export class OneCustomDefined<
+    TTableName extends string = string,
+    TIsNullable extends boolean = boolean,
+> extends Relation<TTableName> {
+    static override readonly [entityKind]: string = 'OneCustomDefined';
+    declare protected $relationBrand: 'OneCustomDefined';
+
+    constructor(
+        sourceTable: Table,
+        referencedTable: AnyTable<{ name: TTableName }>,
+        readonly config:
+            | CustomRelationConfig<
+                TTableName,
+                string,
+                AnyColumn<{ tableName: TTableName }>[]
+            >
+            | undefined,
+        readonly isNullable: TIsNullable,
+    ) {
+        super(sourceTable, referencedTable, config?.relationName);
+    }
+
+    withFieldName(fieldName: string): OneCustomDefined<TTableName> {
+        const relation = new OneCustomDefined(
+            this.sourceTable,
+            this.referencedTable,
+            this.config,
+            this.isNullable,
+        );
+        relation.fieldName = fieldName;
+        return relation;
+    }
+}
+
 
 
 export function eftifyRelations<TTableName extends string, TRelations extends Record<string, Relation<any>>>(table: AnyTable<{
@@ -128,6 +173,24 @@ export function eftifyRelations<TTableName extends string, TRelations extends Re
 
             config._relationMode = ManyCustomDefinedMode.NORMAL;
             return ManyCustomDefined.createFromConfig(helpers, table, config);
+        };
+
+        (helpers as any).oneCustomDefined = (table: any, config: any) => {
+            const builtObj: any = helpers.one(table, config);
+            if (config.mandatory == null) {
+                return builtObj;
+            }
+
+            if (config == null) {
+                config = {};
+            }
+
+            return new One(
+                builtObj.sourceTable,
+                builtObj.referencedTable,
+                config,
+                config.mandatory != true
+            );
         };
 
         return relationConfig(helpers);

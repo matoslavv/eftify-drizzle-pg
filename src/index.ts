@@ -173,8 +173,16 @@ const drizzleEftifyCreateRelations = <TSchemaFull extends Record<string, unknown
 
             const uniqueKey = relName + tableName;
             const isOneToOne = relations[relName]._custom ? relations[relName].type != 'many' : (relations[relName] as any).constructor.name == 'One';
+            const isRelationMandatory = (relation: any): boolean => {
+                if (!relations[relName]._custom) {
+                    return (relations[relName] as One).isNullable != true;
+                } else {
+                    return relations[relName].mandatory;
+                }
+            }
+
             const relationItem: DbQueryRelationRecord = {
-                mandatory: !relations[relName]._custom ? !((relations[relName] as One).isNullable != true) : relations[relName].mandatory,
+                mandatory: isRelationMandatory(relations[relName]),
                 normalizedRelation: relations[relName].normalizedRelation || normalizeRelation(schema, tableNamesMap, relations[relName])
             };
 
