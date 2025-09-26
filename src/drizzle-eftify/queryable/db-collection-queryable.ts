@@ -106,8 +106,15 @@ export class DbCollectionQueryable<TSelection extends SelectedFields<any, any>> 
 		return sql`(SELECT COALESCE(array_agg(${col}), '{}') from ${subq})`
 	}
 
-	firstOrDefault(): SQL<TSelection> {
-		throw 'Not yet implemented, nor used'
+	firstOrDefault(): SQL<SelectResult<TSelection, 'single', any> | null> {
+		const seq = counter++
+		const id = `fnlsq${seq}`
+		const subq = this._baseQuery.limit(1).as(id)
+
+		const retQuery = sql<SelectResult<TSelection, 'single', any> | null>`(SELECT row_to_json(IDREPLACE.*) FROM ${subq} LIMIT 1)`;
+		(retQuery as any).queryChunks[0].value[0] = (retQuery as any).queryChunks[0].value[0].replace('IDREPLACE', id);
+
+		return retQuery
 	}
 
 	where(where: (aliases: TSelection) => SQL | undefined): DbCollectionQueryable<TSelection> {
