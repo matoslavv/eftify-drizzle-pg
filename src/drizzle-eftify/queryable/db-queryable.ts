@@ -2,7 +2,7 @@ import { SQL, SelectedFields, ValueOrArray, and, sql } from 'drizzle-orm'
 import { SelectionProxyHandler } from 'drizzle-orm/selection-proxy'
 import { DbQueryCommon } from '../db-query-common'
 import { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
-import { GroupedDbQueryable } from '../grouped-db-queryable'
+import { GroupedDbQueryable } from '../grouping/grouped-db-queryable'
 import { AnyPgColumn } from 'drizzle-orm/pg-core'
 import { SelectResult } from 'drizzle-orm/query-builders/select.types'
 import DbEftifyConfig from '../db-eftify-config'
@@ -78,7 +78,7 @@ export class DbQueryable<TSelection extends SelectedFields<any, any>> {
 		type SelectedType = ReturnType<typeof this.createSelect<typeof groupColumns>>;
 		type BaseType = TSelection;
 
-		return new GroupedDbQueryable<BaseType, SelectedType, SelectedType>(
+		return new GroupedDbQueryable(
 			this._db,
 			(null as any) as SelectedType,
 			(this._baseQuery as any) as BaseType,

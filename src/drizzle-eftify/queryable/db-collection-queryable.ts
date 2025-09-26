@@ -5,6 +5,7 @@ import { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import { AnyPgColumn } from 'drizzle-orm/pg-core'
 import { SelectResult } from 'drizzle-orm/query-builders/select.types'
 import { EftifyCollectionJoinDeclaration } from '../data-contracts'
+import { GroupedDbCollectionQueryable } from '../grouping/grouped-db-collection-queryable'
 
 let counter = 0
 
@@ -26,12 +27,24 @@ export class DbCollectionQueryable<TSelection extends SelectedFields<any, any>> 
 	}
 
 	sum(
-		builder: (aliases: TSelection) => ValueOrArray<AnyPgColumn | SQL | SQL.Aliased>
+		builder: (aliases: TSelection) => ValueOrArray<AnyPgColumn | SQL | SQL.Aliased>,
+		alias?: string
 	): SQL<number> {
-		const id = `fnlsq${counter++}`
-		const subq = this._baseQuery.as(id)
+		return this.buildAggregationQuery(builder, 'sum', alias);
+	}
 
-		return sql<number>`(SELECT COALESCE(sum(${builder(subq as any)}),0) from ${subq})`
+	min(
+		builder: (aliases: TSelection) => ValueOrArray<AnyPgColumn | SQL | SQL.Aliased>,
+		alias?: string
+	): SQL<number> {
+		return this.buildAggregationQuery(builder, 'min', alias);
+	}
+
+	max(
+		builder: (aliases: TSelection) => ValueOrArray<AnyPgColumn | SQL | SQL.Aliased>,
+		alias?: string
+	): SQL<number> {
+		return this.buildAggregationQuery(builder, 'max', alias);
 	}
 
 	select<TResult extends SelectedFields<any, any>>(selector: (value: TSelection) => TResult) {
@@ -54,6 +67,23 @@ export class DbCollectionQueryable<TSelection extends SelectedFields<any, any>> 
 
 		DbQueryCommon.setFormatColumnsOnBaseQuery(this, select, columns);
 		return new DbCollectionQueryable(this._db, select, this._level + 1)
+	}
+
+	groupBy<TResult extends SelectedFields<any, any>>(selector: (value: TSelection) => TResult) {
+		const subquery = this.buildSubquery();
+		const groupColumns = selector(subquery);
+		DbQueryCommon.ensureColumnAliased(groupColumns, false, null);
+		type SelectedType = ReturnType<typeof this.createSelect<typeof groupColumns>>;
+		type BaseType = TSelection;
+
+		return new GroupedDbCollectionQueryable(
+			this._db,
+			(null as any) as SelectedType,
+			(this._baseQuery as any) as BaseType,
+			this._level + 1,
+			(groupColumns as any) as SelectedType,
+			subquery
+		)
 	}
 
 	toList(columnName: string): SQL<SelectResult<TSelection, 'multiple', any>[]> {
@@ -170,6 +200,15 @@ export class DbCollectionQueryable<TSelection extends SelectedFields<any, any>> 
 
 	private buildSubquery(): any {
 		return this._baseQuery.as(`q${this._level}`)
+	}
+
+	private buildAggregationQuery(
+		builder: (aliases: TSelection) => ValueOrArray<AnyPgColumn | SQL | SQL.Aliased>,
+		aggFunc: string,
+		alias?: string
+	): SQL<number> {
+		const subq = this._baseQuery.as(alias ?? `fnlsq${counter++}`)
+		return sql<number>`(SELECT COALESCE(${aggFunc}(${builder(subq as any)}),0) from ${subq})`
 	}
 
 	private createSelect<TResult extends SelectedFields<any, any>>(
