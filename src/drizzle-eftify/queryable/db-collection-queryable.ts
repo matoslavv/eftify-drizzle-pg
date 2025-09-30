@@ -145,7 +145,7 @@ export class DbCollectionQueryable<TSelection extends SelectedFields<any, any>> 
 			columnName = 'item' + seq
 		}
 
-		const retQuery = sql<SelectResult<TSelection, 'single', any> | null>`(SELECT row_to_json(IDREPLACE.*) AS ${sql.identifier(subq)} FROM ${subq} LIMIT 1)`;
+		const retQuery = sql<SelectResult<TSelection, 'single', any> | null>`(SELECT row_to_json(IDREPLACE.*) AS ${sql.identifier(columnName)} FROM ${subq} LIMIT 1)`;
 		(retQuery as any).queryChunks[0].value[0] = (retQuery as any).queryChunks[0].value[0].replace('IDREPLACE', id);
 
 		return retQuery
