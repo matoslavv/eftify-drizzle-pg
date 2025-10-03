@@ -8,6 +8,7 @@ import { DbEntity } from "./drizzle-eftify/db-entity";
 import { DbQueryRelationRecord } from "./drizzle-eftify/db-query-relation";
 import { DbSet } from "./drizzle-eftify/db-set";
 import { eftifyRelations as eftifyRelationsImp } from "./drizzle-eftify/relations/eftify-relations";
+import { flagHas, flagHasAll, flagHasAny, flagHasNone } from "./drizzle-eftify/filters/bitwise";
 
 
 type RelationBuilder<TSchemaFull extends
@@ -259,3 +260,5 @@ export const drizzleEftify = {
     create: createEftify,
     config: DbEftifyConfig
 }
+
+export { flagHas, flagHasAll, flagHasAny, flagHasNone }

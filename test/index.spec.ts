@@ -3,7 +3,7 @@ import { drizzleEftify } from "../src/index";
 import * as schema from '../debug/schema';
 import { desc, eq, and } from "drizzle-orm";
 import { UserStateFlags } from '../debug/index';
-import { doesNotHaveFlag, hasAllFlags, hasAnyFlag, hasFlag } from "../src/drizzle-eftify/filters/bitwise";
+import { flagHasNone, flagHasAll, flagHasAny, flagHas } from "../src/drizzle-eftify/filters/bitwise";
 const postgres = require('postgres');
 
 const getDb = () => {
@@ -567,7 +567,7 @@ describe('index test', () => {
 		]);
 
 		const verifiedUsers = await db.users.where(p =>
-			hasFlag(p.state, UserStateFlags.Verified)
+			flagHas(p.state, UserStateFlags.Verified)
 		).select(p => ({
 			id: p.id,
 			name: p.name,
@@ -578,7 +578,7 @@ describe('index test', () => {
 		expect(verifiedUsers.map(u => u.name).sort()).toEqual(['Active + Verified', 'Verified User']);
 
 		const activeUsers = await db.users.where(p =>
-			hasFlag(p.state, UserStateFlags.Active)
+			flagHas(p.state, UserStateFlags.Active)
 		).toList();
 
 		expect(activeUsers).toHaveLength(2);
@@ -595,14 +595,14 @@ describe('index test', () => {
 		]);
 
 		const activeAndVerifiedUsers = await db.users.where(p =>
-			hasAllFlags(p.state, UserStateFlags.Active | UserStateFlags.Verified)
+			flagHasAll(p.state, UserStateFlags.Active | UserStateFlags.Verified)
 		).toList();
 
 		expect(activeAndVerifiedUsers).toHaveLength(2);
 		expect(activeAndVerifiedUsers.map(u => u.name).sort()).toEqual(['Active + Verified', 'All Three']);
 
 		const allThreeFlags = await db.users.where(p =>
-			hasAllFlags(p.state, UserStateFlags.Active | UserStateFlags.Verified | UserStateFlags.Slave)
+			flagHasAll(p.state, UserStateFlags.Active | UserStateFlags.Verified | UserStateFlags.Slave)
 		).toList();
 
 		expect(allThreeFlags).toHaveLength(1);
@@ -619,14 +619,14 @@ describe('index test', () => {
 		]);
 
 		const activeOrSlaveUsers = await db.users.where(p =>
-			hasAnyFlag(p.state, UserStateFlags.Active | UserStateFlags.Slave)
+			flagHasAny(p.state, UserStateFlags.Active | UserStateFlags.Slave)
 		).toList();
 
 		expect(activeOrSlaveUsers).toHaveLength(3);
 		expect(activeOrSlaveUsers.map(u => u.name).sort()).toEqual(['Active + Slave', 'Only Active', 'Only Slave']);
 
 		const verifiedOrBannedUsers = await db.users.where(p =>
-			hasAnyFlag(p.state, UserStateFlags.Verified | UserStateFlags.Banned)
+			flagHasAny(p.state, UserStateFlags.Verified | UserStateFlags.Banned)
 		).toList();
 
 		expect(verifiedOrBannedUsers).toHaveLength(2);
@@ -642,14 +642,14 @@ describe('index test', () => {
 		]);
 
 		const notBannedUsers = await db.users.where(p =>
-			doesNotHaveFlag(p.state, UserStateFlags.Banned)
+			flagHasNone(p.state, UserStateFlags.Banned)
 		).toList();
 
 		expect(notBannedUsers).toHaveLength(2);
 		expect(notBannedUsers.map(u => u.name).sort()).toEqual(['Good User', 'Verified User']);
 
 		const notVerifiedUsers = await db.users.where(p =>
-			doesNotHaveFlag(p.state, UserStateFlags.Verified)
+			flagHasNone(p.state, UserStateFlags.Verified)
 		).toList();
 
 		expect(notVerifiedUsers).toHaveLength(1);
@@ -668,8 +668,8 @@ describe('index test', () => {
 
 		const verifiedNotBannedUsers = await db.users.where(p =>
 			and(
-				hasFlag(p.state, UserStateFlags.Verified),
-				doesNotHaveFlag(p.state, UserStateFlags.Banned)
+				flagHas(p.state, UserStateFlags.Verified),
+				flagHasNone(p.state, UserStateFlags.Banned)
 			)
 		).toList();
 
@@ -680,8 +680,8 @@ describe('index test', () => {
 
 		const activeVerifiedNotBannedUsers = await db.users.where(p =>
 			and(
-				hasAllFlags(p.state, UserStateFlags.Active | UserStateFlags.Verified),
-				doesNotHaveFlag(p.state, UserStateFlags.Banned)
+				flagHasAll(p.state, UserStateFlags.Active | UserStateFlags.Verified),
+				flagHasNone(p.state, UserStateFlags.Banned)
 			)
 		).toList();
 
@@ -695,15 +695,15 @@ describe('index test', () => {
 		]);
 
 		const usersWithFlags = await db.users.where(p =>
-			hasFlag(p.state, UserStateFlags.Active)
+			flagHas(p.state, UserStateFlags.Active)
 		).select(p => ({
 			id: p.id,
 			name: p.name,
 			state: p.state,
-			isActive: hasFlag(p.state, UserStateFlags.Active),
-			isVerified: hasFlag(p.state, UserStateFlags.Verified),
-			isSlave: hasFlag(p.state, UserStateFlags.Slave),
-			isBanned: hasFlag(p.state, UserStateFlags.Banned),
+			isActive: flagHas(p.state, UserStateFlags.Active),
+			isVerified: flagHas(p.state, UserStateFlags.Verified),
+			isSlave: flagHas(p.state, UserStateFlags.Slave),
+			isBanned: flagHas(p.state, UserStateFlags.Banned),
 		})).toList();
 
 		expect(usersWithFlags).toHaveLength(1);
@@ -723,14 +723,14 @@ describe('index test', () => {
 		]);
 
 		const noFlagUsers = await db.users.where(p =>
-			doesNotHaveFlag(p.state, UserStateFlags.Active)
+			flagHasNone(p.state, UserStateFlags.Active)
 		).toList();
 
 		const noFlagUser = noFlagUsers.find(u => u.name === 'No Flags');
 		expect(noFlagUser).toBeDefined();
 
 		const allFlagUsers = await db.users.where(p =>
-			hasAllFlags(p.state, UserStateFlags.Active | UserStateFlags.Verified | UserStateFlags.Slave | UserStateFlags.Banned)
+			flagHasAll(p.state, UserStateFlags.Active | UserStateFlags.Verified | UserStateFlags.Slave | UserStateFlags.Banned)
 		).toList();
 
 		const allFlagUser = allFlagUsers.find(u => u.name === 'All Flags');
