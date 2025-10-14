@@ -289,6 +289,71 @@ const drizzleEftified = drizzleEftify.create(queryConnection, {
 
 		const finalRes = aggregatedCteResult;
 
+		// Combined CTEs example - using MULTIPLE CTEs in a single query
+		// This demonstrates the .NET EF Core-like join pattern with leftJoin
+		const combinedCteBuilder = new DbCteBuilder(dbContext.db);
+
+		// First CTE: Active users with custom post counts
+		const activeUsersCte2 = combinedCteBuilder.with(
+			'active_users_combined',
+			dbContext.users
+				.where(p => lt(p.id, 100))
+				.select(p => ({
+					userId: p.id,
+					userName: sql`${p.name}`.as('userName'),  // Alias to avoid ambiguity
+					customPostCount: p.customPosts.select(cp => ({ id: cp.id })).count().as('customPostCount')
+				}))
+		);
+
+		// Second CTE: Aggregated user addresses (note: using same builder!)
+		const aggregatedCte2 = combinedCteBuilder.withAggregation(
+			'aggregated_addresses_combined',
+			dbContext.userAddress.select(p => ({
+				id: p.id,
+				userId: p.userId,
+				street: p.address,
+			})).groupBy(p => ({
+				userId: p.userId,
+				street: p.street
+			})).select(p => ({
+				userId: p.key.userId,
+				addressCount: p.count(),
+				street: p.key.street
+			})),
+			p => ({ userId: p.userId }),
+			'addresses'
+		);
+
+		// NEW PATTERN: Using leftJoin (similar to .NET EF Core)
+		// After flattening, columns are accessible with prefixed keys
+		const combinedCteResult = await dbContext.users
+			.where(p => eq(p.id, 1))
+			.with(...combinedCteBuilder.getCtes())  // Pass ALL CTEs at once!
+			.leftJoin(
+				activeUsersCte2.cte,
+				(user, activeCte) => eq(user.id, activeCte.userId),
+				(user, activeCte) => ({
+					userId: user.id,
+					userName: user.name,
+					customPostCount: activeCte.customPostCount,
+					originalUserName: activeCte.userName
+				})
+			)
+			// Chain second leftJoin
+			.leftJoin(
+				aggregatedCte2.cte,
+				(prev, addrCte) => eq(prev.userId, addrCte.userId),
+				(prev, addrCte) => ({
+					userId: prev.userId,
+					userName: prev.userName,
+					customPostCount: prev.customPostCount,
+					aggregatedAddresses: addrCte.addresses
+				})
+			)
+			.toList();
+
+		const combinedResult = combinedCteResult;
+
 	} catch (error) {
 		const pica = error;
 		console.error('Error:', error);

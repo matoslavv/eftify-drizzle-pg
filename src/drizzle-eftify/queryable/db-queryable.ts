@@ -241,6 +241,80 @@ export class DbQueryable<TSelection extends SelectedFields<any, any>> {
 		return new DbQueryable(this._db, this._baseQuery, this._level, newCtes)
 	}
 
+	/**
+	 * Perform a left join with a CTE or table, returning a combined queryable.
+	 * This allows you to work with both entities together without ambiguous column names.
+	 * Similar to .NET EF Core's join pattern.
+	 *
+	 * @param cte The CTE to join
+	 * @param on The join condition
+	 * @param selector Function that combines both entities into a result shape
+	 * @returns A strongly-typed DbQueryable with the combined result
+	 *
+	 * @example
+	 * const result = await someQueryable
+	 *   .leftJoin(
+	 *     myCte.cte,
+	 *     (prev, cte) => eq(prev.id, cte.userId),
+	 *     (prev, cte) => ({ prev, cte })
+	 *   )
+	 *   .select(p => ({
+	 *     id: p.prev.id,
+	 *     data: p.cte.someField
+	 *   }))
+	 *   .toList();
+	 */
+	leftJoin<TCteSelection extends SelectedFields<any, any>, TResult extends SelectedFields<any, any>>(
+		cte: WithSubquery<any, any>,
+		on: (current: TSelection, cte: TCteSelection) => SQL | undefined,
+		selector: (current: TSelection, cte: TCteSelection) => TResult
+	): DbQueryable<TResult> {
+		// Build a subquery from current query state
+		const subquery = this.buildSubquery()
+		DbQueryCommon.restoreSubqueryFormatColumnsFromBaseQuery(this._baseQuery, subquery)
+
+		// Get the join condition
+		const joinCondition = on(subquery, cte as any)
+
+		// Get the combined columns
+		const columns = selector(subquery, cte as any)
+
+		// Only flatten if the user passed nested proxy objects (not individual column selections)
+		const needsFlattening = DbQueryCommon.needsFlattening(columns)
+		const finalColumns = needsFlattening ? DbQueryCommon.flattenProxyStructure(columns) : columns
+		DbQueryCommon.ensureColumnAliased(finalColumns, false, null)
+
+		// Apply CTEs at database level if present
+		let db: any = this._db
+		if (this._ctes.length > 0) {
+			db = this._db.with(...this._ctes)
+		}
+
+		// Build the query: select combined columns from subquery joined with CTE
+		let finalQuery = db.select(finalColumns).from(subquery)
+
+		// Apply the join
+		finalQuery = finalQuery.leftJoin(cte, joinCondition)
+
+		DbQueryCommon.setFormatColumnsOnBaseQuery(this, finalQuery, finalColumns)
+		return new DbQueryable(this._db, finalQuery, this._level + 1, this._ctes)
+	}
+
+	/**
+	 * Perform a left join with a CTE or table, then select columns
+	 * @param cte The CTE to join
+	 * @param on The join condition
+	 * @param selector The columns to select from both the current query and CTE
+	 * @deprecated Use leftJoin instead for better handling of ambiguous column names
+	 */
+	leftJoinSelect<TCteSelection extends SelectedFields<any, any>, TResult extends SelectedFields<any, any>>(
+		cte: WithSubquery<any, any>,
+		on: (current: TSelection, cte: TCteSelection) => SQL | undefined,
+		selector: (current: TSelection, cte: TCteSelection) => TResult
+	): DbQueryable<TResult> {
+		return this.leftJoin(cte, on, selector)
+	}
+
 	private createSelfInstance(query: any): DbQueryable<TSelection> {
 		return new DbQueryable(this._db, query, this._level, this._ctes)
 	}

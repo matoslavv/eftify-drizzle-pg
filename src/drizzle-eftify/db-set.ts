@@ -160,12 +160,31 @@ export class DbSet<TDataModel extends any, TTable extends AnyPgTable, TEntity ex
 	}
 
 	/**
-	 * Perform a left join with a CTE or table, then select columns
+	 * Perform a left join with a CTE or table, returning a combined queryable.
+	 * This allows you to work with both entities together without ambiguous column names.
+	 * Similar to .NET EF Core's join pattern.
+	 *
 	 * @param cte The CTE to join
 	 * @param on The join condition
-	 * @param selector The columns to select from both the table and CTE
+	 * @param selector Function that combines both entities into a result shape
+	 * @returns A strongly-typed DbQueryable with the combined result
+	 *
+	 * @example
+	 * const result = await dbContext.users
+	 *   .with(...builder.getCtes())
+	 *   .leftJoin(
+	 *     myCte.cte,
+	 *     (user, cte) => eq(user.id, cte.userId),
+	 *     (user, cte) => ({ user, cte })
+	 *   )
+	 *   .select(p => ({
+	 *     id: p.user.id,
+	 *     name: p.user.name,
+	 *     data: p.cte.someField
+	 *   }))
+	 *   .toList();
 	 */
-	leftJoinSelect<TCteSelection extends SelectedFields<any, any>, TResult extends SelectedFields<any, any>>(
+	leftJoin<TCteSelection extends SelectedFields<any, any>, TResult extends SelectedFields<any, any>>(
 		cte: WithSubquery<any, any>,
 		on: (table: TEntity, cte: TCteSelection) => SQL | undefined,
 		selector: (table: TEntity, cte: TCteSelection) => TResult
@@ -190,12 +209,16 @@ export class DbSet<TDataModel extends any, TTable extends AnyPgTable, TEntity ex
 		// Get the join condition
 		const joinCondition = on(this._entity, cte as any)
 
-		// Get the columns to select
+		// Get the combined columns
 		const columns = selector(this._entity, cte as any)
-		DbQueryCommon.ensureColumnAliased(columns, false, null)
 
-		// Build the complete query: select columns from table joined with CTE
-		let finalQuery = dbWithCtes.select(columns).from(this._entity.table as any)
+		// Only flatten if the user passed nested proxy objects (not individual column selections)
+		const needsFlattening = DbQueryCommon.needsFlattening(columns)
+		const finalColumns = needsFlattening ? DbQueryCommon.flattenProxyStructure(columns) : columns
+		DbQueryCommon.ensureColumnAliased(finalColumns, false, null)
+
+		// Build the complete query: select combined columns from table joined with CTE
+		let finalQuery = dbWithCtes.select(finalColumns).from(this._entity.table as any)
 
 		// Apply the join
 		finalQuery = finalQuery.leftJoin(cte, joinCondition)
@@ -210,8 +233,23 @@ export class DbSet<TDataModel extends any, TTable extends AnyPgTable, TEntity ex
 			finalQuery = finalQuery.orderBy(orderByCondition)
 		}
 
-		DbQueryCommon.setFormatColumnsOnBaseQuery(this, finalQuery, columns)
+		DbQueryCommon.setFormatColumnsOnBaseQuery(this, finalQuery, finalColumns)
 		return new DbQueryable(db, finalQuery, 1, pendingCtes)
+	}
+
+	/**
+	 * Perform a left join with a CTE or table, then select columns
+	 * @param cte The CTE to join
+	 * @param on The join condition
+	 * @param selector The columns to select from both the table and CTE
+	 * @deprecated Use leftJoin instead for better handling of ambiguous column names
+	 */
+	leftJoinSelect<TCteSelection extends SelectedFields<any, any>, TResult extends SelectedFields<any, any>>(
+		cte: WithSubquery<any, any>,
+		on: (table: TEntity, cte: TCteSelection) => SQL | undefined,
+		selector: (table: TEntity, cte: TCteSelection) => TResult
+	): DbQueryable<TResult> {
+		return this.leftJoin(cte, on, selector)
 	}
 
 	async firstOrDefault(): Promise<InferSelectModel<TTable>> {
