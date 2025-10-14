@@ -160,42 +160,64 @@ export class DbSet<TDataModel extends any, TTable extends AnyPgTable, TEntity ex
 	}
 
 	/**
-	 * Perform a left join with a CTE or table, returning a combined queryable.
+	 * Perform a left join with a CTE, DbQueryable, or table, returning a combined queryable.
 	 * This allows you to work with both entities together without ambiguous column names.
 	 * Similar to .NET EF Core's join pattern.
 	 *
-	 * @param cte The CTE to join
+	 * @param cteOrQueryable The CTE (WithSubquery) or DbQueryable to join
 	 * @param on The join condition
 	 * @param selector Function that combines both entities into a result shape
 	 * @returns A strongly-typed DbQueryable with the combined result
 	 *
 	 * @example
+	 * // With CTE
 	 * const result = await dbContext.users
 	 *   .with(...builder.getCtes())
 	 *   .leftJoin(
 	 *     myCte.cte,
 	 *     (user, cte) => eq(user.id, cte.userId),
-	 *     (user, cte) => ({ user, cte })
+	 *     (user, cte) => ({ userId: user.id, data: cte.someField })
 	 *   )
-	 *   .select(p => ({
-	 *     id: p.user.id,
-	 *     name: p.user.name,
-	 *     data: p.cte.someField
-	 *   }))
+	 *   .toList();
+	 *
+	 * @example
+	 * // With DbQueryable
+	 * const subQuery = dbContext.posts.select(p => ({ authorId: p.authorId }));
+	 * const result = await dbContext.users
+	 *   .leftJoin(
+	 *     subQuery,
+	 *     (user, sub) => eq(user.id, sub.authorId),
+	 *     (user, sub) => ({ userId: user.id, authorId: sub.authorId })
+	 *   )
 	 *   .toList();
 	 */
 	leftJoin<TCteSelection extends SelectedFields<any, any>, TResult extends SelectedFields<any, any>>(
-		cte: WithSubquery<any, any>,
+		cteOrQueryable: WithSubquery<any, any> | DbQueryable<TCteSelection>,
 		on: (table: TEntity, cte: TCteSelection) => SQL | undefined,
 		selector: (table: TEntity, cte: TCteSelection) => TResult
 	): DbQueryable<TResult> {
 		const db = this.db
 		const pendingCtes = (this as any)._pendingCtes || []
 
+		// Convert DbQueryable to a CTE if needed
+		let cte: WithSubquery<any, any>
+		let additionalCtes: WithSubquery<any, any>[] = []
+
+		if (cteOrQueryable instanceof DbQueryable) {
+			// It's a DbQueryable - convert it to a CTE
+			const queryableName = `subquery_${Date.now()}`
+			cte = db.$with(queryableName).as(cteOrQueryable.toDrizzleQuery())
+			additionalCtes.push(cte)
+		} else {
+			// It's already a WithSubquery (CTE)
+			cte = cteOrQueryable
+		}
+
 		// Apply CTEs at database level
 		let dbWithCtes: any = db
-		if (pendingCtes.length > 0) {
-			dbWithCtes = db.with(...pendingCtes)
+		const allCtes = [...pendingCtes, ...additionalCtes]
+		if (allCtes.length > 0) {
+			dbWithCtes = db.with(...allCtes)
 		}
 
 		// Capture pending conditions before they're cleared
@@ -250,7 +272,7 @@ export class DbSet<TDataModel extends any, TTable extends AnyPgTable, TEntity ex
 		}
 
 		DbQueryCommon.setFormatColumnsOnBaseQuery(this, finalQuery, finalColumns)
-		return new DbQueryable(db, finalQuery, 1, pendingCtes)
+		return new DbQueryable(db, finalQuery, 1, allCtes)
 	}
 
 	/**

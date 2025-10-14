@@ -423,6 +423,34 @@ const drizzleEftified = drizzleEftify.create(queryConnection, {
 
 		console.log('Navigation property test result:', navigationTestResult);
 
+		// TEST LEFT JOIN WITH DBQUERYABLE (not CTE)
+		// This demonstrates joining with a DbQueryable directly
+		const postsQueryable = dbContext.posts
+			.select(p => ({
+				authorId: p.authorId,
+				postId: p.id
+			}))
+			.groupBy(p => ({ authorId: p.authorId }))
+			.select(p => ({
+				authorId: p.key.authorId,
+				postCount: p.count()
+			}));
+
+		const queryableJoinResult = await dbContext.users
+			.where(p => lt(p.id, 5))
+			.leftJoin(
+				postsQueryable,  // Pass DbQueryable directly, not a CTE!
+				(user, posts) => eq(user.id, posts.authorId),
+				(user, posts) => ({
+					userId: user.id,
+					userName: sql`${user.name}`.as('userName'),
+					postCount: posts.postCount
+				})
+			)
+			.toList();
+
+		console.log('DbQueryable join result:', queryableJoinResult);
+
 	} catch (error) {
 		const pica = error;
 		console.error('Error:', error);

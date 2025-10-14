@@ -242,36 +242,58 @@ export class DbQueryable<TSelection extends SelectedFields<any, any>> {
 	}
 
 	/**
-	 * Perform a left join with a CTE or table, returning a combined queryable.
+	 * Perform a left join with a CTE, DbQueryable, or table, returning a combined queryable.
 	 * This allows you to work with both entities together without ambiguous column names.
 	 * Similar to .NET EF Core's join pattern.
 	 *
-	 * @param cte The CTE to join
+	 * @param cteOrQueryable The CTE (WithSubquery) or DbQueryable to join
 	 * @param on The join condition
 	 * @param selector Function that combines both entities into a result shape
 	 * @returns A strongly-typed DbQueryable with the combined result
 	 *
 	 * @example
+	 * // With CTE
 	 * const result = await someQueryable
 	 *   .leftJoin(
 	 *     myCte.cte,
 	 *     (prev, cte) => eq(prev.id, cte.userId),
-	 *     (prev, cte) => ({ prev, cte })
+	 *     (prev, cte) => ({ prevId: prev.id, data: cte.someField })
 	 *   )
-	 *   .select(p => ({
-	 *     id: p.prev.id,
-	 *     data: p.cte.someField
-	 *   }))
+	 *   .toList();
+	 *
+	 * @example
+	 * // With DbQueryable
+	 * const subQuery = dbContext.posts.select(p => ({ authorId: p.authorId }));
+	 * const result = await someQueryable
+	 *   .leftJoin(
+	 *     subQuery,
+	 *     (prev, sub) => eq(prev.userId, sub.authorId),
+	 *     (prev, sub) => ({ userId: prev.userId, authorId: sub.authorId })
+	 *   )
 	 *   .toList();
 	 */
 	leftJoin<TCteSelection extends SelectedFields<any, any>, TResult extends SelectedFields<any, any>>(
-		cte: WithSubquery<any, any>,
+		cteOrQueryable: WithSubquery<any, any> | DbQueryable<TCteSelection>,
 		on: (current: TSelection, cte: TCteSelection) => SQL | undefined,
 		selector: (current: TSelection, cte: TCteSelection) => TResult
 	): DbQueryable<TResult> {
 		// Build a subquery from current query state
 		const subquery = this.buildSubquery()
 		DbQueryCommon.restoreSubqueryFormatColumnsFromBaseQuery(this._baseQuery, subquery)
+
+		// Convert DbQueryable to a CTE if needed
+		let cte: WithSubquery<any, any>
+		let additionalCtes: WithSubquery<any, any>[] = []
+
+		if (cteOrQueryable instanceof DbQueryable) {
+			// It's a DbQueryable - convert it to a CTE
+			const queryableName = `subquery_${Date.now()}`
+			cte = this._db.$with(queryableName).as(cteOrQueryable.toDrizzleQuery())
+			additionalCtes.push(cte)
+		} else {
+			// It's already a WithSubquery (CTE)
+			cte = cteOrQueryable
+		}
 
 		// Track navigation properties (though subqueries typically don't have navigation)
 		// This is here for consistency and potential edge cases
@@ -290,8 +312,9 @@ export class DbQueryable<TSelection extends SelectedFields<any, any>> {
 
 		// Apply CTEs at database level if present
 		let db: any = this._db
-		if (this._ctes.length > 0) {
-			db = this._db.with(...this._ctes)
+		const allCtes = [...this._ctes, ...additionalCtes]
+		if (allCtes.length > 0) {
+			db = this._db.with(...allCtes)
 		}
 
 		// Build the query: select combined columns from subquery joined with CTE
@@ -311,7 +334,7 @@ export class DbQueryable<TSelection extends SelectedFields<any, any>> {
 		}
 
 		DbQueryCommon.setFormatColumnsOnBaseQuery(this, finalQuery, finalColumns)
-		return new DbQueryable(this._db, finalQuery, this._level + 1, this._ctes)
+		return new DbQueryable(this._db, finalQuery, this._level + 1, allCtes)
 	}
 
 	/**
