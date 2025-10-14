@@ -75,45 +75,56 @@ export class DbCteBuilder {
 	/**
 	 * Creates an aggregation CTE that groups by the specified key(s) and aggregates remaining fields using json_agg
 	 * @param name The name of the new CTE
-	 * @param sourceCte The source CTE to aggregate
-	 * @param keySelector Function that selects the grouping key(s) from the CTE
+	 * @param queryable The source queryable to aggregate
+	 * @param keySelector Function that selects the grouping key(s) from a subquery proxy
 	 * @param aggregationAlias Optional alias for the aggregated array column (defaults to 'items')
 	 * @returns A new DbCte with the aggregated structure
 	 *
 	 * @example
-	 * // Given a CTE with {productId, dailyPrice, categoryId}
-	 * const productsCte = builder.with('products', query);
+	 * // Given a queryable with {userId, idCount, idSum, street}
 	 * const aggregated = builder.withAggregation(
-	 *   'aggregatedProducts',
-	 *   productsCte,
-	 *   p => ({ productId: p.productId })
+	 *   'aggregatedUsers',
+	 *   dbContext.userAddress.select(p => ({
+	 *     userId: p.userId,
+	 *     idCount: p.count(),
+	 *     street: p.address
+	 *   })),
+	 *   p => ({ userId: p.userId }),
+	 *   'items'
 	 * )
-	 * // Results in: {productId, items: [{dailyPrice, categoryId}]}
+	 * // Results in: {userId, items: [{idCount, street}]}
 	 */
-	withAggregation<TSelection extends SelectedFields<any, any>, TKey extends SelectedFields<any, any>>(
+	withAggregation<
+		TSelection extends SelectedFields<any, any>,
+		TKey extends SelectedFields<any, any>,
+		TAlias extends string = 'items'
+	>(
 		name: string,
-		sourceCte: DbCte<TSelection>,
+		queryable: DbQueryable<TSelection>,
 		keySelector: (value: TSelection) => TKey,
-		aggregationAlias: string = 'items'
-	): DbCte<TKey & { [key: string]: any }> {
-		// Get the CTE table reference
-		const cteTable = sourceCte.table
+		aggregationAlias?: TAlias
+	): DbCte<TKey & { [K in TAlias]: any[] }> {
+		// Default aggregation alias
+		const alias = (aggregationAlias || 'items') as TAlias
+
+		// Get the internal query to access its fields
+		const internalQuery = (queryable as any)._baseQuery
+		const selectedFields = internalQuery?.config?.fields || internalQuery?._?.selectedFields || {}
+
+		// Create a subquery to work with
+		const subquery = internalQuery.as(name + '_sq')
 
 		// Get the key columns
-		const keyColumns = keySelector(cteTable)
+		const keyColumns = keySelector(subquery)
 
 		// Build the list of all columns to exclude from aggregation (the key columns)
 		const keyNames = new Set(Object.keys(keyColumns))
 
-		// Get all columns from the source CTE
-		const sourceCteInternal = sourceCte.cte as any
-		const allColumns = sourceCteInternal._?.selectedFields || {}
-
 		// Build json_build_object arguments for non-key columns
 		const jsonBuildArgs: any[] = []
-		for (const colName in allColumns) {
+		for (const colName in selectedFields) {
 			if (!keyNames.has(colName)) {
-				const column = cteTable[colName as keyof TSelection]
+				const column = subquery[colName]
 				jsonBuildArgs.push(sql`${sql.raw(`'${colName}'`)}`)
 				jsonBuildArgs.push(column)
 			}
@@ -123,17 +134,17 @@ export class DbCteBuilder {
 		const aggregatedQuery = this._db
 			.select({
 				...keyColumns,
-				[aggregationAlias]: jsonBuildArgs.length > 0
+				[alias]: jsonBuildArgs.length > 0
 					? sql`COALESCE(json_agg(json_build_object(${sql.join(jsonBuildArgs, sql`, `)})), '[]'::json)`.as(aggregationAlias)
 					: sql`'[]'::json`.as(aggregationAlias)
 			})
-			.from(sourceCte.cte as any)
+			.from(subquery)
 			.groupBy(...Object.values(keyColumns) as any[])
 
-		// Create a new CTE from this aggregated query
+		// Create the CTE
 		const newCte = this._db.$with(name).as(aggregatedQuery)
 		this._ctes.push(newCte)
 
-		return new DbCte(this._db, newCte)
+		return new DbCte<TKey & { [K in TAlias]: any[] }>(this._db, newCte)
 	}
 }

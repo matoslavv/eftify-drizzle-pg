@@ -222,8 +222,8 @@ const drizzleEftified = drizzleEftify.create(queryConnection, {
 		})).firstOrDefault();
 
 		//Simple CTE example
-		const cteBuilder = new DbCteBuilder(dbContext.db);
-		const activeUsersCte = cteBuilder.with(
+		const cteActiveBuilder = new DbCteBuilder(dbContext.db);
+		const activeUsersCte = cteActiveBuilder.with(
 			'active_users',
 			dbContext.users
 				.where(p => lt(p.id, 100))
@@ -251,9 +251,9 @@ const drizzleEftified = drizzleEftify.create(queryConnection, {
 
 
 
-
-		const baseAggCte = cteBuilder.with(
-			'base_aggregated_users',
+		const cteAggrBuilder = new DbCteBuilder(dbContext.db);
+		const aggregatedCte = cteAggrBuilder.withAggregation(
+			'aggregated_users',
 			dbContext.userAddress.select(p => ({
 				id: p.id,
 				userId: p.userId,
@@ -266,19 +266,14 @@ const drizzleEftified = drizzleEftify.create(queryConnection, {
 				idCount: p.count(),
 				idSum: p.sum(p => p.id),
 				street: p.key.street     //Key property holds the grouping key similar to EF Core
-			}))
-		);
-
-		const aggregatedCte = cteBuilder.withAggregation(
-			'aggregated_users',
-			baseAggCte,
+			})),
 			p => ({ userId: p.userId }),
 			'items'
 		);
 
 		const aggregatedCteResult = await dbContext.users
 			.where(p => eq(p.id, 1))
-			.with(...cteBuilder.getCtes())
+			.with(...cteAggrBuilder.getCtes())
 			.leftJoinSelect(
 				aggregatedCte.cte,
 				// Join condition
@@ -291,6 +286,8 @@ const drizzleEftified = drizzleEftify.create(queryConnection, {
 				})
 			)
 			.toList();
+
+		const finalRes = aggregatedCteResult;
 
 	} catch (error) {
 		const pica = error;
