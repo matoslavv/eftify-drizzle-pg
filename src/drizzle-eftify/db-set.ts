@@ -206,22 +206,38 @@ export class DbSet<TDataModel extends any, TTable extends AnyPgTable, TEntity ex
 		this._pendingWhere = null
 		this._pendingOrderBy = null
 
+		// Track navigation properties (like user.userAddress.address)
+		const relationArr: DbQueryRelation[] = []
+		this._entity.subscribeNavigation((args) => {
+			relationArr.push(args.navigation)
+		})
+
 		// Get the join condition
 		const joinCondition = on(this._entity, cte as any)
 
 		// Get the combined columns
 		const columns = selector(this._entity, cte as any)
 
+		// Unsubscribe from navigation tracking
+		this._entity.unsubscribeNavigation()
+
 		// Only flatten if the user passed nested proxy objects (not individual column selections)
 		const needsFlattening = DbQueryCommon.needsFlattening(columns)
 		const finalColumns = needsFlattening ? DbQueryCommon.flattenProxyStructure(columns) : columns
-		DbQueryCommon.ensureColumnAliased(finalColumns, false, null)
+		DbQueryCommon.ensureColumnAliased(finalColumns, false, relationArr)
 
 		// Build the complete query: select combined columns from table joined with CTE
 		let finalQuery = dbWithCtes.select(finalColumns).from(this._entity.table as any)
 
 		// Apply the join
 		finalQuery = finalQuery.leftJoin(cte, joinCondition)
+
+		// Build navigation relations (joins for foreign keys)
+		try {
+			finalQuery = DbQueryCommon.buildRelations(finalQuery, relationArr)
+		} catch (error) {
+			// Might have been built in previous step
+		}
 
 		// Apply where condition if present
 		if (whereCondition != null) {

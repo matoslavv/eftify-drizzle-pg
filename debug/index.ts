@@ -236,7 +236,7 @@ const drizzleEftified = drizzleEftify.create(queryConnection, {
 		const cteResult = await dbContext.users
 			.where(p => eq(p.id, 1))
 			.with(activeUsersCte.cte)
-			.leftJoinSelect(
+			.leftJoin(
 				activeUsersCte.cte,
 				// Join condition
 				(user, cte) => eq(user.id, cte.userId),
@@ -244,6 +244,7 @@ const drizzleEftified = drizzleEftify.create(queryConnection, {
 				(user, cte) => ({
 					id: user.id,
 					name: user.name,
+					crash: user.userAddress.address,
 					customCount: cte.customPostCount  // Access CTE column!
 				})
 			)
@@ -353,6 +354,74 @@ const drizzleEftified = drizzleEftify.create(queryConnection, {
 			.toList();
 
 		const combinedResult = combinedCteResult;
+
+		// LEFT JOIN TWO QUERYABLES (without CTEs)
+		// This demonstrates joining two regular queries together
+		// Example: Join users with their aggregated post statistics
+
+		// Second queryable: Post statistics per user (grouped by author)
+		const postStatsQuery = dbContext.posts
+			.select(p => ({
+				authorId: p.authorId,
+				postContent: p.content
+			}))
+			.groupBy(p => ({
+				authorId: p.authorId
+			}))
+			.select(p => ({
+				authorId: p.key.authorId,
+				postCount: p.count()
+			}));
+
+		// Now join them together using leftJoin!
+		// Convert the second query to a CTE-like structure using .with()
+		const postStatsCte = dbContext.db.$with('post_stats').as(postStatsQuery.toDrizzleQuery());
+
+		const joinedQueryables = await dbContext.users
+			.where(p => lt(p.id, 10))
+			.with(postStatsCte)
+			.leftJoin(
+				postStatsCte,
+				(user, stats) => eq(user.id, stats.authorId),
+				(user, stats) => ({
+					userId: user.id,
+					userName: sql`${user.name}`.as('userName'),
+					postCount: stats.postCount
+				})
+			)
+			.toList();
+
+		console.log('Joined queryables result:', joinedQueryables);
+
+		// TEST NAVIGATION PROPERTIES IN LEFT JOIN
+		// This tests that navigation properties (like user.userAddress.address) work in leftJoin
+		const navTestCteBuilder = new DbCteBuilder(dbContext.db);
+		const navTestCte = navTestCteBuilder.with(
+			'active_users_nav_test',
+			dbContext.users
+				.where(p => lt(p.id, 100))
+				.select(p => ({
+					userId: p.id,
+					customPostCount: p.customPosts.select(cp => ({ id: cp.id })).count().as('customPostCount')
+				}))
+		);
+
+		const navigationTestResult = await dbContext.users
+			.where(p => eq(p.id, 1))
+			.with(navTestCte.cte)
+			.leftJoin(
+				navTestCte.cte,
+				(user, cte) => eq(user.id, cte.userId),
+				(user, cte) => ({
+					id: user.id,
+					name: sql`${user.name}`.as('name'),
+					address: user.userAddress.address,  // Navigation property!
+					customCount: cte.customPostCount
+				})
+			)
+			.toList();
+
+		console.log('Navigation property test result:', navigationTestResult);
 
 	} catch (error) {
 		const pica = error;

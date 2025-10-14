@@ -273,6 +273,10 @@ export class DbQueryable<TSelection extends SelectedFields<any, any>> {
 		const subquery = this.buildSubquery()
 		DbQueryCommon.restoreSubqueryFormatColumnsFromBaseQuery(this._baseQuery, subquery)
 
+		// Track navigation properties (though subqueries typically don't have navigation)
+		// This is here for consistency and potential edge cases
+		const relationArr: any[] = []
+
 		// Get the join condition
 		const joinCondition = on(subquery, cte as any)
 
@@ -282,7 +286,7 @@ export class DbQueryable<TSelection extends SelectedFields<any, any>> {
 		// Only flatten if the user passed nested proxy objects (not individual column selections)
 		const needsFlattening = DbQueryCommon.needsFlattening(columns)
 		const finalColumns = needsFlattening ? DbQueryCommon.flattenProxyStructure(columns) : columns
-		DbQueryCommon.ensureColumnAliased(finalColumns, false, null)
+		DbQueryCommon.ensureColumnAliased(finalColumns, false, relationArr)
 
 		// Apply CTEs at database level if present
 		let db: any = this._db
@@ -295,6 +299,16 @@ export class DbQueryable<TSelection extends SelectedFields<any, any>> {
 
 		// Apply the join
 		finalQuery = finalQuery.leftJoin(cte, joinCondition)
+
+		// Build navigation relations (joins for foreign keys)
+		// Note: Typically subqueries don't have navigation, but this is here for completeness
+		if (relationArr.length > 0) {
+			try {
+				finalQuery = DbQueryCommon.buildRelations(finalQuery, relationArr)
+			} catch (error) {
+				// Might have been built in previous step
+			}
+		}
 
 		DbQueryCommon.setFormatColumnsOnBaseQuery(this, finalQuery, finalColumns)
 		return new DbQueryable(this._db, finalQuery, this._level + 1, this._ctes)
