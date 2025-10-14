@@ -7,6 +7,7 @@ import {
 	SelectedFields,
 	Table,
 	ValueOrArray,
+	WithSubquery,
 	and,
 	sql
 } from 'drizzle-orm'
@@ -146,6 +147,71 @@ export class DbSet<TDataModel extends any, TTable extends AnyPgTable, TEntity ex
 
 		DbQueryCommon.setFormatColumnsOnBaseQuery(this, select, columns);
 		return new DbQueryable(db, select, 1)
+	}
+
+	/**
+	 * Add CTEs to queries on this DbSet. CTEs can be referenced in subsequent operations.
+	 * @param ctes Array of CTE definitions from DbCteBuilder
+	 */
+	with(...ctes: WithSubquery<any, any>[]): this {
+		// Store CTEs to be applied to queries
+		(this as any)._pendingCtes = ctes
+		return this
+	}
+
+	/**
+	 * Perform a left join with a CTE or table, then select columns
+	 * @param cte The CTE to join
+	 * @param on The join condition
+	 * @param selector The columns to select from both the table and CTE
+	 */
+	leftJoinSelect<TCteSelection extends SelectedFields<any, any>, TResult extends SelectedFields<any, any>>(
+		cte: WithSubquery<any, any>,
+		on: (table: TEntity, cte: TCteSelection) => SQL | undefined,
+		selector: (table: TEntity, cte: TCteSelection) => TResult
+	): DbQueryable<TResult> {
+		const db = this.db
+		const pendingCtes = (this as any)._pendingCtes || []
+
+		// Apply CTEs at database level
+		let dbWithCtes: any = db
+		if (pendingCtes.length > 0) {
+			dbWithCtes = db.with(...pendingCtes)
+		}
+
+		// Capture pending conditions before they're cleared
+		const whereCondition = this._pendingWhere
+		const orderByCondition = this._pendingOrderBy
+
+		// Clear pending conditions
+		this._pendingWhere = null
+		this._pendingOrderBy = null
+
+		// Get the join condition
+		const joinCondition = on(this._entity, cte as any)
+
+		// Get the columns to select
+		const columns = selector(this._entity, cte as any)
+		DbQueryCommon.ensureColumnAliased(columns, false, null)
+
+		// Build the complete query: select columns from table joined with CTE
+		let finalQuery = dbWithCtes.select(columns).from(this._entity.table as any)
+
+		// Apply the join
+		finalQuery = finalQuery.leftJoin(cte, joinCondition)
+
+		// Apply where condition if present
+		if (whereCondition != null) {
+			finalQuery = finalQuery.where(whereCondition)
+		}
+
+		// Apply orderBy if present
+		if (orderByCondition != null) {
+			finalQuery = finalQuery.orderBy(orderByCondition)
+		}
+
+		DbQueryCommon.setFormatColumnsOnBaseQuery(this, finalQuery, columns)
+		return new DbQueryable(db, finalQuery, 1, pendingCtes)
 	}
 
 	async firstOrDefault(): Promise<InferSelectModel<TTable>> {

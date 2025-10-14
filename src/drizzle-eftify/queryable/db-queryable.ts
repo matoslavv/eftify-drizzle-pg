@@ -1,4 +1,4 @@
-import { SQL, SelectedFields, ValueOrArray, and, sql } from 'drizzle-orm'
+import { SQL, SelectedFields, ValueOrArray, and, sql, WithSubquery } from 'drizzle-orm'
 import { SelectionProxyHandler } from 'drizzle-orm/selection-proxy'
 import { DbQueryCommon } from '../db-query-common'
 import { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
@@ -11,17 +11,29 @@ export class DbQueryable<TSelection extends SelectedFields<any, any>> {
 	private _db: PostgresJsDatabase<any>
 	private _baseQuery: any
 	private _level: number
+	private _ctes: WithSubquery<any, any>[] = []
 
-	constructor(db: PostgresJsDatabase<any>, baseQuery: any, level: number) {
+	constructor(db: PostgresJsDatabase<any>, baseQuery: any, level: number, ctes?: WithSubquery<any, any>[]) {
 		this._db = db
 		this._level = level
 		this._baseQuery = baseQuery
+		if (ctes) {
+			this._ctes = ctes
+		}
 	}
 
 	async count(): Promise<number> {
-		const retVal = await this._db
+		let db: any = this._db
+
+		// Apply CTEs at the database level if present
+		if (this._ctes.length > 0) {
+			db = this._db.with(...this._ctes)
+		}
+
+		const retVal = await db
 			.select({ count: sql<number>`count(*)::integer` })
 			.from(this.buildSubquery())
+
 		return retVal[0].count
 	}
 
@@ -29,9 +41,17 @@ export class DbQueryable<TSelection extends SelectedFields<any, any>> {
 		builder: (aliases: TSelection) => ValueOrArray<AnyPgColumn | SQL | SQL.Aliased>
 	): Promise<number> {
 		const subquery = this.buildSubquery()
-		const retVal = await this._db
+		let db: any = this._db
+
+		// Apply CTEs at the database level if present
+		if (this._ctes.length > 0) {
+			db = this._db.with(...this._ctes)
+		}
+
+		const retVal = await db
 			.select({ count: sql<number>`sum(${builder(subquery)})` })
 			.from(subquery)
+
 		return retVal[0].count
 	}
 
@@ -39,9 +59,17 @@ export class DbQueryable<TSelection extends SelectedFields<any, any>> {
 		builder: (aliases: TSelection) => ValueOrArray<AnyPgColumn | SQL | SQL.Aliased>
 	): Promise<number> {
 		const subquery = this.buildSubquery()
-		const retVal = await this._db
+		let db: any = this._db
+
+		// Apply CTEs at the database level if present
+		if (this._ctes.length > 0) {
+			db = this._db.with(...this._ctes)
+		}
+
+		const retVal = await db
 			.select({ count: sql<number>`max(${builder(subquery)})` })
 			.from(subquery)
+
 		return retVal[0].count
 	}
 
@@ -52,10 +80,18 @@ export class DbQueryable<TSelection extends SelectedFields<any, any>> {
 		DbQueryCommon.restoreSubqueryFormatColumnsFromBaseQuery(this._baseQuery, subquery);
 		const columns = selector(subquery)
 		DbQueryCommon.ensureColumnAliased(columns, false, null)
-		let select = this._db.select(columns).from(subquery)
+
+		let db: any = this._db
+
+		// Apply CTEs at the database level if present
+		if (this._ctes.length > 0) {
+			db = this._db.with(...this._ctes)
+		}
+
+		let select = db.select(columns).from(subquery)
 
 		DbQueryCommon.setFormatColumnsOnBaseQuery(this, select, columns);
-		return new DbQueryable(this._db, select, this._level + 1)
+		return new DbQueryable(this._db, select, this._level + 1, this._ctes)
 	}
 
 	selectDistinct<TResult extends SelectedFields<any, any>>(
@@ -65,10 +101,18 @@ export class DbQueryable<TSelection extends SelectedFields<any, any>> {
 		DbQueryCommon.restoreSubqueryFormatColumnsFromBaseQuery(this._baseQuery, subquery);
 		const columns = selector(subquery)
 		DbQueryCommon.ensureColumnAliased(columns, false, null)
-		let select = this._db.selectDistinct(columns).from(subquery)
+
+		let db: any = this._db
+
+		// Apply CTEs at the database level if present
+		if (this._ctes.length > 0) {
+			db = this._db.with(...this._ctes)
+		}
+
+		let select = db.selectDistinct(columns).from(subquery)
 
 		DbQueryCommon.setFormatColumnsOnBaseQuery(this, select, columns);
-		return new DbQueryable(this._db, select, this._level + 1)
+		return new DbQueryable(this._db, select, this._level + 1, this._ctes)
 	}
 
 	groupBy<TResult extends SelectedFields<any, any>>(selector: (value: TSelection) => TResult) {
@@ -90,31 +134,45 @@ export class DbQueryable<TSelection extends SelectedFields<any, any>> {
 
 
 	async firstOrDefault(): Promise<SelectResult<TSelection, 'multiple', any>> {
+		let query = this._baseQuery
+
+		// Apply CTEs if present - need to rebuild query with CTEs
+		if (this._ctes.length > 0) {
+			query = this.rebuildQueryWithCtes()
+		}
+
 		if (DbEftifyConfig.traceEnabled) {
 			const msg = DbQueryCommon.getTraceMessage('firstOrDefault');
 			console.time(msg);
-			const resultArr = await this._baseQuery.limit(1).execute();
+			const resultArr = await query.limit(1).execute();
 			console.timeEnd(msg);
-			DbQueryCommon.mapCollectionValuesFromDriver(this._baseQuery._formatCollections, resultArr);
+			DbQueryCommon.mapCollectionValuesFromDriver(query._formatCollections || this._baseQuery._formatCollections, resultArr);
 			return resultArr[0];
 		} else {
-			const resultArr = await this._baseQuery.limit(1).execute();
-			DbQueryCommon.mapCollectionValuesFromDriver(this._baseQuery._formatCollections, resultArr);
+			const resultArr = await query.limit(1).execute();
+			DbQueryCommon.mapCollectionValuesFromDriver(query._formatCollections || this._baseQuery._formatCollections, resultArr);
 			return resultArr[0];
 		}
 	}
 
 	async toList(): Promise<SelectResult<TSelection, 'multiple', any>[]> {
+		let query = this._baseQuery
+
+		// Apply CTEs if present - need to rebuild query with CTEs
+		if (this._ctes.length > 0) {
+			query = this.rebuildQueryWithCtes()
+		}
+
 		if (DbEftifyConfig.traceEnabled) {
 			const msg = DbQueryCommon.getTraceMessage('toList');
 			console.time(msg);
-			const retVal = await this._baseQuery;
+			const retVal = await query;
 			console.timeEnd(msg);
-			DbQueryCommon.mapCollectionValuesFromDriver(this._baseQuery._formatCollections, retVal);
+			DbQueryCommon.mapCollectionValuesFromDriver(query._formatCollections || this._baseQuery._formatCollections, retVal);
 			return retVal;
 		} else {
-			const retVal = await this._baseQuery;
-			DbQueryCommon.mapCollectionValuesFromDriver(this._baseQuery._formatCollections, retVal);
+			const retVal = await query;
+			DbQueryCommon.mapCollectionValuesFromDriver(query._formatCollections || this._baseQuery._formatCollections, retVal);
 			return retVal;
 		}
 	}
@@ -174,8 +232,17 @@ export class DbQueryable<TSelection extends SelectedFields<any, any>> {
 		return this._db.select().from(this.buildSubquery()).toSQL()
 	}
 
+	/**
+	 * Add CTEs to this query. CTEs can be referenced in subsequent operations.
+	 * @param ctes Array of CTE definitions from DbCteBuilder
+	 */
+	with(...ctes: WithSubquery<any, any>[]): DbQueryable<TSelection> {
+		const newCtes = [...this._ctes, ...ctes]
+		return new DbQueryable(this._db, this._baseQuery, this._level, newCtes)
+	}
+
 	private createSelfInstance(query: any): DbQueryable<TSelection> {
-		return new DbQueryable(this._db, query, this._level)
+		return new DbQueryable(this._db, query, this._level, this._ctes)
 	}
 
 	private buildSubquery(): any {
@@ -187,5 +254,58 @@ export class DbQueryable<TSelection extends SelectedFields<any, any>> {
 		columns: TResult
 	) {
 		return this._db.select(columns).from(subquery)
+	}
+
+	/**
+	 * Rebuild the base query with CTEs applied at the database level
+	 * This is necessary because CTEs must be applied before building the select
+	 */
+	private rebuildQueryWithCtes(): any {
+		const config = (this._baseQuery as any).config
+		const db: any = this._db.with(...this._ctes)
+
+		// Rebuild the query with CTEs
+		let query = db.select(config.fields).from(config.table)
+
+		// Reapply all query modifiers
+		if (config.where) {
+			query = query.where(config.where)
+		}
+
+		if (config.joins && config.joins.length > 0) {
+			for (const join of config.joins) {
+				if (join.joinType === 'left') {
+					query = query.leftJoin(join.table, join.on)
+					if (join.lateral) {
+						const joinsArr: any[] = query.config.joins
+						joinsArr[joinsArr.length - 1].lateral = true
+					}
+				} else if (join.joinType === 'inner') {
+					query = query.innerJoin(join.table, join.on)
+				}
+			}
+		}
+
+		if (config.orderBy && config.orderBy.length > 0) {
+			query = query.orderBy(...config.orderBy)
+		}
+
+		if (config.limit !== undefined) {
+			query = query.limit(config.limit)
+		}
+
+		if (config.offset !== undefined) {
+			query = query.offset(config.offset)
+		}
+
+		if (config.distinct) {
+			// Note: Can't change to distinct after select is built
+			// This is a limitation we'll document
+		}
+
+		// Preserve format collections
+		query._formatCollections = this._baseQuery._formatCollections
+
+		return query
 	}
 }

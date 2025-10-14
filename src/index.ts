@@ -262,3 +262,4 @@ export const drizzleEftify = {
 }
 
 export { flagHas, flagHasAll, flagHasAny, flagHasNone }
+export { DbCte, DbCteBuilder } from './drizzle-eftify/cte/db-cte-builder'
