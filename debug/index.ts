@@ -252,8 +252,8 @@ const drizzleEftified = drizzleEftify.create(queryConnection, {
 
 
 
-		const aggregatedCte = cteBuilder.with(
-			'aggregated_users',
+		const baseAggCte = cteBuilder.with(
+			'base_aggregated_users',
 			dbContext.userAddress.select(p => ({
 				id: p.id,
 				userId: p.userId,
@@ -269,9 +269,16 @@ const drizzleEftified = drizzleEftify.create(queryConnection, {
 			}))
 		);
 
+		const aggregatedCte = cteBuilder.withAggregation(
+			'aggregated_users',
+			baseAggCte,
+			p => ({ userId: p.userId }),
+			'items'
+		);
+
 		const aggregatedCteResult = await dbContext.users
 			.where(p => eq(p.id, 1))
-			.with(aggregatedCte.cte)
+			.with(...cteBuilder.getCtes())
 			.leftJoinSelect(
 				aggregatedCte.cte,
 				// Join condition
@@ -280,17 +287,10 @@ const drizzleEftified = drizzleEftify.create(queryConnection, {
 				(user, cte) => ({
 					id: user.id,
 					name: user.name,
-					street: cte.street,
-					customCount: cte.idCount  // Access CTE column!
+					aggregatedItems: cte.items  // Access the aggregated array column!
 				})
 			)
 			.toList();
-
-		console.log('CTE Join Result:', cteResult);
-
-		const kok = 'ot';
-
-
 
 	} catch (error) {
 		const pica = error;

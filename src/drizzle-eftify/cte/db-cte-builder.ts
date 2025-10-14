@@ -1,4 +1,4 @@
-import { SelectedFields, SQL, WithSubquery } from 'drizzle-orm'
+import { SelectedFields, WithSubquery, sql } from 'drizzle-orm'
 import { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import { DbQueryable } from '../queryable/db-queryable'
 
@@ -70,5 +70,70 @@ export class DbCteBuilder {
 	 */
 	getCtes(): WithSubquery<any, any>[] {
 		return this._ctes
+	}
+
+	/**
+	 * Creates an aggregation CTE that groups by the specified key(s) and aggregates remaining fields using json_agg
+	 * @param name The name of the new CTE
+	 * @param sourceCte The source CTE to aggregate
+	 * @param keySelector Function that selects the grouping key(s) from the CTE
+	 * @param aggregationAlias Optional alias for the aggregated array column (defaults to 'items')
+	 * @returns A new DbCte with the aggregated structure
+	 *
+	 * @example
+	 * // Given a CTE with {productId, dailyPrice, categoryId}
+	 * const productsCte = builder.with('products', query);
+	 * const aggregated = builder.withAggregation(
+	 *   'aggregatedProducts',
+	 *   productsCte,
+	 *   p => ({ productId: p.productId })
+	 * )
+	 * // Results in: {productId, items: [{dailyPrice, categoryId}]}
+	 */
+	withAggregation<TSelection extends SelectedFields<any, any>, TKey extends SelectedFields<any, any>>(
+		name: string,
+		sourceCte: DbCte<TSelection>,
+		keySelector: (value: TSelection) => TKey,
+		aggregationAlias: string = 'items'
+	): DbCte<TKey & { [key: string]: any }> {
+		// Get the CTE table reference
+		const cteTable = sourceCte.table
+
+		// Get the key columns
+		const keyColumns = keySelector(cteTable)
+
+		// Build the list of all columns to exclude from aggregation (the key columns)
+		const keyNames = new Set(Object.keys(keyColumns))
+
+		// Get all columns from the source CTE
+		const sourceCteInternal = sourceCte.cte as any
+		const allColumns = sourceCteInternal._?.selectedFields || {}
+
+		// Build json_build_object arguments for non-key columns
+		const jsonBuildArgs: any[] = []
+		for (const colName in allColumns) {
+			if (!keyNames.has(colName)) {
+				const column = cteTable[colName as keyof TSelection]
+				jsonBuildArgs.push(sql`${sql.raw(`'${colName}'`)}`)
+				jsonBuildArgs.push(column)
+			}
+		}
+
+		// Build the aggregation query
+		const aggregatedQuery = this._db
+			.select({
+				...keyColumns,
+				[aggregationAlias]: jsonBuildArgs.length > 0
+					? sql`COALESCE(json_agg(json_build_object(${sql.join(jsonBuildArgs, sql`, `)})), '[]'::json)`.as(aggregationAlias)
+					: sql`'[]'::json`.as(aggregationAlias)
+			})
+			.from(sourceCte.cte as any)
+			.groupBy(...Object.values(keyColumns) as any[])
+
+		// Create a new CTE from this aggregated query
+		const newCte = this._db.$with(name).as(aggregatedQuery)
+		this._ctes.push(newCte)
+
+		return new DbCte(this._db, newCte)
 	}
 }
