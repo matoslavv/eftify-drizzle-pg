@@ -451,6 +451,26 @@ const drizzleEftified = drizzleEftify.create(queryConnection, {
 
 		console.log('DbQueryable join result:', queryableJoinResult);
 
+		// TEST LEFT JOIN WITH DBSET (with where condition)
+		// This demonstrates joining with a DbSet that has filtering applied
+		const recentPosts = dbContext.posts.where(p => lt(p.id, 100));
+
+		const dbSetJoinResult = await dbContext.users
+			.where(p => lt(p.id, 5))
+			.leftJoin(
+				recentPosts,  // Pass DbSet with where condition!
+				(user, post) => eq(user.id, post.authorId),
+				(user, post) => ({
+					userId: user.id,
+					userName: sql`${user.name}`.as('userName'),
+					postId: post.id,
+					postContent: post.content
+				})
+			)
+			.toList();
+
+		console.log('DbSet join result (first 3):', dbSetJoinResult.slice(0, 3));
+
 	} catch (error) {
 		const pica = error;
 		console.error('Error:', error);

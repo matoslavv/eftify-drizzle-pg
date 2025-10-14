@@ -6,6 +6,8 @@ import { GroupedDbQueryable } from '../grouping/grouped-db-queryable'
 import { AnyPgColumn } from 'drizzle-orm/pg-core'
 import { SelectResult } from 'drizzle-orm/query-builders/select.types'
 import DbEftifyConfig from '../db-eftify-config'
+import type { DbSet } from '../db-set'
+import type { DbEntity } from '../db-entity'
 
 export class DbQueryable<TSelection extends SelectedFields<any, any>> {
 	private _db: PostgresJsDatabase<any>
@@ -242,38 +244,45 @@ export class DbQueryable<TSelection extends SelectedFields<any, any>> {
 	}
 
 	/**
-	 * Perform a left join with a CTE, DbQueryable, or table, returning a combined queryable.
-	 * This allows you to work with both entities together without ambiguous column names.
-	 * Similar to .NET EF Core's join pattern.
-	 *
-	 * @param cteOrQueryable The CTE (WithSubquery) or DbQueryable to join
-	 * @param on The join condition
-	 * @param selector Function that combines both entities into a result shape
-	 * @returns A strongly-typed DbQueryable with the combined result
+	 * Perform a left join with a CTE, returning a combined queryable.
+	 */
+	leftJoin<TCteSelection extends SelectedFields<any, any>, TResult extends SelectedFields<any, any>>(
+		cte: WithSubquery<any, any>,
+		on: (current: TSelection, cte: TCteSelection) => SQL | undefined,
+		selector: (current: TSelection, cte: TCteSelection) => TResult
+	): DbQueryable<TResult>
+
+	/**
+	 * Perform a left join with a DbQueryable, returning a combined queryable.
+	 */
+	leftJoin<TCteSelection extends SelectedFields<any, any>, TResult extends SelectedFields<any, any>>(
+		queryable: DbQueryable<TCteSelection>,
+		on: (current: TSelection, cte: TCteSelection) => SQL | undefined,
+		selector: (current: TSelection, cte: TCteSelection) => TResult
+	): DbQueryable<TResult>
+
+	/**
+	 * Perform a left join with a DbSet, returning a combined queryable.
+	 * This preserves the strong typing of the DbSet entity.
 	 *
 	 * @example
-	 * // With CTE
+	 * const activePosts = dbContext.posts.where(p => eq(p.status, 'active'));
 	 * const result = await someQueryable
 	 *   .leftJoin(
-	 *     myCte.cte,
-	 *     (prev, cte) => eq(prev.id, cte.userId),
-	 *     (prev, cte) => ({ prevId: prev.id, data: cte.someField })
-	 *   )
-	 *   .toList();
-	 *
-	 * @example
-	 * // With DbQueryable
-	 * const subQuery = dbContext.posts.select(p => ({ authorId: p.authorId }));
-	 * const result = await someQueryable
-	 *   .leftJoin(
-	 *     subQuery,
-	 *     (prev, sub) => eq(prev.userId, sub.authorId),
-	 *     (prev, sub) => ({ userId: prev.userId, authorId: sub.authorId })
+	 *     activePosts,
+	 *     (prev, post) => eq(prev.userId, post.authorId),  // post is fully typed!
+	 *     (prev, post) => ({ userId: prev.userId, postId: post.id })
 	 *   )
 	 *   .toList();
 	 */
+	leftJoin<TJoinEntity extends DbEntity<any, any>, TResult extends SelectedFields<any, any>>(
+		dbSet: DbSet<any, any, TJoinEntity>,
+		on: (current: TSelection, joinEntity: TJoinEntity) => SQL | undefined,
+		selector: (current: TSelection, joinEntity: TJoinEntity) => TResult
+	): DbQueryable<TResult>
+
 	leftJoin<TCteSelection extends SelectedFields<any, any>, TResult extends SelectedFields<any, any>>(
-		cteOrQueryable: WithSubquery<any, any> | DbQueryable<TCteSelection>,
+		cteOrQueryableOrSet: WithSubquery<any, any> | DbQueryable<TCteSelection> | DbSet<any, any, any>,
 		on: (current: TSelection, cte: TCteSelection) => SQL | undefined,
 		selector: (current: TSelection, cte: TCteSelection) => TResult
 	): DbQueryable<TResult> {
@@ -281,18 +290,25 @@ export class DbQueryable<TSelection extends SelectedFields<any, any>> {
 		const subquery = this.buildSubquery()
 		DbQueryCommon.restoreSubqueryFormatColumnsFromBaseQuery(this._baseQuery, subquery)
 
-		// Convert DbQueryable to a CTE if needed
+		// Convert DbQueryable or DbSet to a CTE if needed
 		let cte: WithSubquery<any, any>
 		let additionalCtes: WithSubquery<any, any>[] = []
 
-		if (cteOrQueryable instanceof DbQueryable) {
+		if (cteOrQueryableOrSet instanceof DbQueryable) {
 			// It's a DbQueryable - convert it to a CTE
 			const queryableName = `subquery_${Date.now()}`
-			cte = this._db.$with(queryableName).as(cteOrQueryable.toDrizzleQuery())
+			cte = this._db.$with(queryableName).as(cteOrQueryableOrSet.toDrizzleQuery())
+			additionalCtes.push(cte)
+		} else if (cteOrQueryableOrSet?.constructor?.name === 'DbSet') {
+			// It's a DbSet - convert it to a query first, then to a CTE
+			// This preserves any where/orderBy conditions on the DbSet
+			const dbSetQuery = (cteOrQueryableOrSet as any).createEmptyQuery()
+			const queryableName = `dbset_${Date.now()}`
+			cte = this._db.$with(queryableName).as(dbSetQuery)
 			additionalCtes.push(cte)
 		} else {
 			// It's already a WithSubquery (CTE)
-			cte = cteOrQueryable
+			cte = cteOrQueryableOrSet as WithSubquery<any, any>
 		}
 
 		// Track navigation properties (though subqueries typically don't have navigation)

@@ -160,57 +160,70 @@ export class DbSet<TDataModel extends any, TTable extends AnyPgTable, TEntity ex
 	}
 
 	/**
-	 * Perform a left join with a CTE, DbQueryable, or table, returning a combined queryable.
-	 * This allows you to work with both entities together without ambiguous column names.
-	 * Similar to .NET EF Core's join pattern.
-	 *
-	 * @param cteOrQueryable The CTE (WithSubquery) or DbQueryable to join
-	 * @param on The join condition
-	 * @param selector Function that combines both entities into a result shape
-	 * @returns A strongly-typed DbQueryable with the combined result
+	 * Perform a left join with a CTE, returning a combined queryable.
+	 */
+	leftJoin<TCteSelection extends SelectedFields<any, any>, TResult extends SelectedFields<any, any>>(
+		cte: WithSubquery<any, any>,
+		on: (table: TEntity, cte: TCteSelection) => SQL | undefined,
+		selector: (table: TEntity, cte: TCteSelection) => TResult
+	): DbQueryable<TResult>
+
+	/**
+	 * Perform a left join with a DbQueryable, returning a combined queryable.
+	 */
+	leftJoin<TCteSelection extends SelectedFields<any, any>, TResult extends SelectedFields<any, any>>(
+		queryable: DbQueryable<TCteSelection>,
+		on: (table: TEntity, cte: TCteSelection) => SQL | undefined,
+		selector: (table: TEntity, cte: TCteSelection) => TResult
+	): DbQueryable<TResult>
+
+	/**
+	 * Perform a left join with a DbSet, returning a combined queryable.
+	 * This preserves the strong typing of the DbSet entity.
 	 *
 	 * @example
-	 * // With CTE
-	 * const result = await dbContext.users
-	 *   .with(...builder.getCtes())
-	 *   .leftJoin(
-	 *     myCte.cte,
-	 *     (user, cte) => eq(user.id, cte.userId),
-	 *     (user, cte) => ({ userId: user.id, data: cte.someField })
-	 *   )
-	 *   .toList();
-	 *
-	 * @example
-	 * // With DbQueryable
-	 * const subQuery = dbContext.posts.select(p => ({ authorId: p.authorId }));
+	 * const activePosts = dbContext.posts.where(p => eq(p.status, 'active'));
 	 * const result = await dbContext.users
 	 *   .leftJoin(
-	 *     subQuery,
-	 *     (user, sub) => eq(user.id, sub.authorId),
-	 *     (user, sub) => ({ userId: user.id, authorId: sub.authorId })
+	 *     activePosts,
+	 *     (user, post) => eq(user.id, post.authorId),  // post is fully typed!
+	 *     (user, post) => ({ userId: user.id, postId: post.id })
 	 *   )
 	 *   .toList();
 	 */
+	leftJoin<TJoinEntity extends DbEntity<any, any>, TResult extends SelectedFields<any, any>>(
+		dbSet: DbSet<any, any, TJoinEntity>,
+		on: (table: TEntity, joinEntity: TJoinEntity) => SQL | undefined,
+		selector: (table: TEntity, joinEntity: TJoinEntity) => TResult
+	): DbQueryable<TResult>
+
 	leftJoin<TCteSelection extends SelectedFields<any, any>, TResult extends SelectedFields<any, any>>(
-		cteOrQueryable: WithSubquery<any, any> | DbQueryable<TCteSelection>,
+		cteOrQueryableOrSet: WithSubquery<any, any> | DbQueryable<TCteSelection> | DbSet<any, any, any>,
 		on: (table: TEntity, cte: TCteSelection) => SQL | undefined,
 		selector: (table: TEntity, cte: TCteSelection) => TResult
 	): DbQueryable<TResult> {
 		const db = this.db
 		const pendingCtes = (this as any)._pendingCtes || []
 
-		// Convert DbQueryable to a CTE if needed
+		// Convert DbQueryable or DbSet to a CTE if needed
 		let cte: WithSubquery<any, any>
 		let additionalCtes: WithSubquery<any, any>[] = []
 
-		if (cteOrQueryable instanceof DbQueryable) {
+		if (cteOrQueryableOrSet instanceof DbSet) {
+			// It's a DbSet - convert it to a query first, then to a CTE
+			// This preserves any where/orderBy conditions on the DbSet
+			const dbSetQuery = (cteOrQueryableOrSet as any).createEmptyQuery()
+			const queryableName = `dbset_${Date.now()}`
+			cte = db.$with(queryableName).as(dbSetQuery)
+			additionalCtes.push(cte)
+		} else if (cteOrQueryableOrSet instanceof DbQueryable) {
 			// It's a DbQueryable - convert it to a CTE
 			const queryableName = `subquery_${Date.now()}`
-			cte = db.$with(queryableName).as(cteOrQueryable.toDrizzleQuery())
+			cte = db.$with(queryableName).as(cteOrQueryableOrSet.toDrizzleQuery())
 			additionalCtes.push(cte)
 		} else {
 			// It's already a WithSubquery (CTE)
-			cte = cteOrQueryable
+			cte = cteOrQueryableOrSet
 		}
 
 		// Apply CTEs at database level
