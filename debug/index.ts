@@ -259,14 +259,6 @@ const drizzleEftified = drizzleEftify.create(queryConnection, {
 				id: p.id,
 				userId: p.userId,
 				street: p.address,
-			})).groupBy(p => ({
-				userId: p.userId,
-				street: p.street
-			})).select(p => ({
-				userId: p.key.userId,
-				idCount: p.count(),
-				idSum: p.sum(p => p.id),
-				street: p.key.street     //Key property holds the grouping key similar to EF Core
 			})),
 			p => ({ userId: p.userId }),
 			'items'
@@ -275,19 +267,21 @@ const drizzleEftified = drizzleEftify.create(queryConnection, {
 		const aggregatedCteResult = await dbContext.users
 			.where(p => eq(p.id, 1))
 			.with(...cteAggrBuilder.getCtes())
-			.leftJoinSelect(
-				aggregatedCte.cte,
-				// Join condition
+			.leftJoin(
+				aggregatedCte,  // Use DbCte directly (not .cte) for strong typing!
+				// Join condition - cte is now strongly typed!
 				(user, cte) => eq(user.id, cte.userId),
 				// Select columns from both table and CTE
 				(user, cte) => ({
 					id: user.id,
 					name: user.name,
-					aggregatedItems: cte.items  // Access the aggregated array column!
+					aggregatedItems: cte.items  // Access the aggregated array column! Now strongly typed: Array<{id, street}>
 				})
 			)
 			.toList();
 
+		// Verify strong typing: cte.items should be Array<{id, street}> (userId excluded because it's the key)
+		// IntelliSense should now show: cte.userId (key), cte.items (array of {id, street})
 		const finalRes = aggregatedCteResult;
 
 		// Combined CTEs example - using MULTIPLE CTEs in a single query
@@ -326,12 +320,12 @@ const drizzleEftified = drizzleEftify.create(queryConnection, {
 		);
 
 		// NEW PATTERN: Using leftJoin (similar to .NET EF Core)
-		// After flattening, columns are accessible with prefixed keys
+		// Using DbCte directly for strong typing!
 		const combinedCteResult = await dbContext.users
 			.where(p => eq(p.id, 1))
 			.with(...combinedCteBuilder.getCtes())  // Pass ALL CTEs at once!
 			.leftJoin(
-				activeUsersCte2.cte,
+				activeUsersCte2,  // Use DbCte directly for strong typing!
 				(user, activeCte) => eq(user.id, activeCte.userId),
 				(user, activeCte) => ({
 					userId: user.id,
@@ -342,13 +336,13 @@ const drizzleEftified = drizzleEftify.create(queryConnection, {
 			)
 			// Chain second leftJoin
 			.leftJoin(
-				aggregatedCte2.cte,
+				aggregatedCte2,  // Use DbCte directly for strong typing!
 				(prev, addrCte) => eq(prev.userId, addrCte.userId),
 				(prev, addrCte) => ({
 					userId: prev.userId,
 					userName: prev.userName,
 					customPostCount: prev.customPostCount,
-					aggregatedAddresses: addrCte.addresses
+					aggregatedAddresses: addrCte.addresses  // Now strongly typed as Array<{addressCount, street}>!
 				})
 			)
 			.toList();

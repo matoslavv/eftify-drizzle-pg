@@ -3,6 +3,13 @@ import { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import { DbQueryable } from '../queryable/db-queryable'
 
 /**
+ * Helper type to compute the aggregated item type by excluding key fields from selection
+ */
+type AggregatedItemType<TSelection extends SelectedFields<any, any>, TKey extends SelectedFields<any, any>> = {
+	[K in Exclude<keyof TSelection, keyof TKey>]: TSelection[K]
+}
+
+/**
  * Represents a Common Table Expression (CTE) that can be used in queries.
  * Provides full TypeScript typing for CTE columns and enables joining with other tables.
  */
@@ -103,7 +110,7 @@ export class DbCteBuilder {
 		queryable: DbQueryable<TSelection>,
 		keySelector: (value: TSelection) => TKey,
 		aggregationAlias?: TAlias
-	): DbCte<TKey & { [K in TAlias]: any[] }> {
+	): DbCte<TKey & { [K in TAlias]: Array<AggregatedItemType<TSelection, TKey>> }> {
 		// Default aggregation alias
 		const alias = (aggregationAlias || 'items') as TAlias
 
@@ -145,6 +152,6 @@ export class DbCteBuilder {
 		const newCte = this._db.$with(name).as(aggregatedQuery)
 		this._ctes.push(newCte)
 
-		return new DbCte<TKey & { [K in TAlias]: any[] }>(this._db, newCte)
+		return new DbCte<TKey & { [K in TAlias]: Array<AggregatedItemType<TSelection, TKey>> }>(this._db, newCte)
 	}
 }
