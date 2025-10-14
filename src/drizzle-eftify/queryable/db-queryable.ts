@@ -286,6 +286,64 @@ export class DbQueryable<TSelection extends SelectedFields<any, any>> {
 		on: (current: TSelection, cte: TCteSelection) => SQL | undefined,
 		selector: (current: TSelection, cte: TCteSelection) => TResult
 	): DbQueryable<TResult> {
+		return this._performJoin('left', cteOrQueryableOrSet, on, selector)
+	}
+
+	/**
+	 * Perform an inner join with a CTE, returning a combined queryable.
+	 */
+	innerJoin<TCteSelection extends SelectedFields<any, any>, TResult extends SelectedFields<any, any>>(
+		cte: WithSubquery<any, any>,
+		on: (current: TSelection, cte: TCteSelection) => SQL | undefined,
+		selector: (current: TSelection, cte: TCteSelection) => TResult
+	): DbQueryable<TResult>
+
+	/**
+	 * Perform an inner join with a DbQueryable, returning a combined queryable.
+	 */
+	innerJoin<TCteSelection extends SelectedFields<any, any>, TResult extends SelectedFields<any, any>>(
+		queryable: DbQueryable<TCteSelection>,
+		on: (current: TSelection, cte: TCteSelection) => SQL | undefined,
+		selector: (current: TSelection, cte: TCteSelection) => TResult
+	): DbQueryable<TResult>
+
+	/**
+	 * Perform an inner join with a DbSet, returning a combined queryable.
+	 * This preserves the strong typing of the DbSet entity.
+	 *
+	 * @example
+	 * const activePosts = dbContext.posts.where(p => eq(p.status, 'active'));
+	 * const result = await someQueryable
+	 *   .innerJoin(
+	 *     activePosts,
+	 *     (prev, post) => eq(prev.userId, post.authorId),  // post is fully typed!
+	 *     (prev, post) => ({ userId: prev.userId, postId: post.id })
+	 *   )
+	 *   .toList();
+	 */
+	innerJoin<TJoinEntity extends DbEntity<any, any>, TResult extends SelectedFields<any, any>>(
+		dbSet: DbSet<any, any, TJoinEntity>,
+		on: (current: TSelection, joinEntity: TJoinEntity) => SQL | undefined,
+		selector: (current: TSelection, joinEntity: TJoinEntity) => TResult
+	): DbQueryable<TResult>
+
+	innerJoin<TCteSelection extends SelectedFields<any, any>, TResult extends SelectedFields<any, any>>(
+		cteOrQueryableOrSet: WithSubquery<any, any> | DbQueryable<TCteSelection> | DbSet<any, any, any>,
+		on: (current: TSelection, cte: TCteSelection) => SQL | undefined,
+		selector: (current: TSelection, cte: TCteSelection) => TResult
+	): DbQueryable<TResult> {
+		return this._performJoin('inner', cteOrQueryableOrSet, on, selector)
+	}
+
+	/**
+	 * Shared implementation for both left and inner joins
+	 */
+	private _performJoin<TCteSelection extends SelectedFields<any, any>, TResult extends SelectedFields<any, any>>(
+		joinType: 'left' | 'inner',
+		cteOrQueryableOrSet: WithSubquery<any, any> | DbQueryable<TCteSelection> | DbSet<any, any, any>,
+		on: (current: TSelection, cte: TCteSelection) => SQL | undefined,
+		selector: (current: TSelection, cte: TCteSelection) => TResult
+	): DbQueryable<TResult> {
 		// Build a subquery from current query state
 		const subquery = this.buildSubquery()
 		DbQueryCommon.restoreSubqueryFormatColumnsFromBaseQuery(this._baseQuery, subquery)
@@ -336,8 +394,12 @@ export class DbQueryable<TSelection extends SelectedFields<any, any>> {
 		// Build the query: select combined columns from subquery joined with CTE
 		let finalQuery = db.select(finalColumns).from(subquery)
 
-		// Apply the join
-		finalQuery = finalQuery.leftJoin(cte, joinCondition)
+		// Apply the join (left or inner based on joinType)
+		if (joinType === 'left') {
+			finalQuery = finalQuery.leftJoin(cte, joinCondition)
+		} else {
+			finalQuery = finalQuery.innerJoin(cte, joinCondition)
+		}
 
 		// Build navigation relations (joins for foreign keys)
 		// Note: Typically subqueries don't have navigation, but this is here for completeness

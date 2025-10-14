@@ -471,6 +471,83 @@ const drizzleEftified = drizzleEftify.create(queryConnection, {
 
 		console.log('DbSet join result (first 3):', dbSetJoinResult.slice(0, 3));
 
+		// TEST INNER JOIN WITH CTE
+		// This demonstrates innerJoin which only returns rows that have matches in both tables
+		const innerJoinCteBuilder = new DbCteBuilder(dbContext.db);
+		const activeUsersInnerCte = innerJoinCteBuilder.with(
+			'active_users_inner',
+			dbContext.users
+				.where(p => lt(p.id, 100))
+				.select(p => ({
+					userId: p.id,
+					customPostCount: p.customPosts.select(cp => ({ id: cp.id })).count().as('customPostCount')
+				}))
+		);
+
+		const innerJoinCteResult = await dbContext.users
+			.where(p => lt(p.id, 5))
+			.with(activeUsersInnerCte.cte)
+			.innerJoin(
+				activeUsersInnerCte.cte,
+				(user, cte) => eq(user.id, cte.userId),
+				(user, cte) => ({
+					userId: user.id,
+					userName: sql`${user.name}`.as('userName'),
+					customCount: cte.customPostCount
+				})
+			)
+			.toList();
+
+		console.log('Inner join CTE result:', innerJoinCteResult);
+
+		// TEST INNER JOIN WITH DBQUERYABLE
+		// This demonstrates joining with a DbQueryable directly using inner join
+		const postsQueryableInner = dbContext.posts
+			.select(p => ({
+				authorId: p.authorId,
+				postId: p.id
+			}))
+			.groupBy(p => ({ authorId: p.authorId }))
+			.select(p => ({
+				authorId: p.key.authorId,
+				postCount: p.count()
+			}));
+
+		const innerJoinQueryableResult = await dbContext.users
+			.where(p => lt(p.id, 5))
+			.innerJoin(
+				postsQueryableInner,
+				(user, posts) => eq(user.id, posts.authorId),
+				(user, posts) => ({
+					userId: user.id,
+					userName: sql`${user.name}`.as('userName'),
+					postCount: posts.postCount
+				})
+			)
+			.toList();
+
+		console.log('Inner join DbQueryable result:', innerJoinQueryableResult);
+
+		// TEST INNER JOIN WITH DBSET (with where condition)
+		// Only returns users that have matching posts
+		const postsWithContent = dbContext.posts.where(p => lt(p.id, 50));
+
+		const innerJoinDbSetResult = await dbContext.users
+			.where(p => lt(p.id, 10))
+			.innerJoin(
+				postsWithContent,
+				(user, post) => eq(user.id, post.authorId),
+				(user, post) => ({
+					userId: user.id,
+					userName: sql`${user.name}`.as('userName'),
+					postId: post.id,
+					postContent: post.content
+				})
+			)
+			.toList();
+
+		console.log('Inner join DbSet result (first 3):', innerJoinDbSetResult.slice(0, 3));
+
 	} catch (error) {
 		const pica = error;
 		console.error('Error:', error);
