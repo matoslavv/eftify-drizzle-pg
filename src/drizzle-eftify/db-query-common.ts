@@ -313,7 +313,12 @@ export class DbQueryCommon {
 
 			for (const item of result) {
 				for (const formatField of formatCollections) {
-					const collectionField = item[formatField.fieldName];
+					let collectionField = item[formatField.fieldName];
+					if (collectionField == null) {
+						item[formatField.fieldName] = [];
+						collectionField = item[formatField.fieldName]
+					}
+
 					const hasChildren = formatField.childSelections?.length > 0;
 
 					for (const collectionItem of collectionField) {
