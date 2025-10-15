@@ -336,8 +336,9 @@ export class DbQueryCommon {
 							}
 
 							const selectionField = formatField.selection[name];
-							decoder = selectionField?.mapFromDriverValue;
-							if (decoder != null) {
+							if (selectionField?.mapFromDriverValue != null) {
+								// Bind the context to the column object for proper this binding
+								decoder = (val: any) => selectionField.mapFromDriverValue.call(selectionField, val);
 								decoderCache.set(keyPrefix + formatField.fieldName + '-' + name, decoder);
 								collectionItem[name] = decoder(field);
 								continue;

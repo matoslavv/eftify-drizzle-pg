@@ -393,6 +393,19 @@ export class DbQueryable<TSelection extends SelectedFields<any, any>> {
 			cte = cteOrQueryableOrSet as WithSubquery<any, any>
 		}
 
+		// Restore format columns from the CTE if it has them
+		// This is needed for CTE aggregations that have column mappers
+		const cteQuery = (cte as any)._?.query
+		if (cteQuery?._formatCollections) {
+			// Transfer format metadata to the CTE proxy columns
+			for (const formatCol of cteQuery._formatCollections) {
+				const cteColumn = (cte as any)[formatCol.fieldName]
+				if (cteColumn) {
+					cteColumn.eftifyFormatColumn = formatCol
+				}
+			}
+		}
+
 		// Track navigation properties (though subqueries typically don't have navigation)
 		// This is here for consistency and potential edge cases
 		const relationArr: any[] = []

@@ -138,12 +138,31 @@ export class DbCteBuilder {
 		}
 
 		// Build the aggregation query
+		const aggregationColumn = jsonBuildArgs.length > 0
+			? sql`COALESCE(json_agg(json_build_object(${sql.join(jsonBuildArgs, sql`, `)})), '[]'::json)`.as(aggregationAlias)
+			: sql`'[]'::json`.as(aggregationAlias)
+
+		// Store format metadata for column mapping (similar to DbCollectionQueryable.toList)
+		// This enables proper mapping of Date and other special types within aggregated arrays
+		const aggregatedItemFields: any = {}
+		for (const colName in selectedFields) {
+			if (!keyNames.has(colName)) {
+				aggregatedItemFields[colName] = selectedFields[colName]
+			}
+		}
+
+		// Attach format metadata to the aggregation column
+		// This will be picked up by mapCollectionValuesFromDriver during result processing
+		(aggregationColumn as any).eftifyFormatColumn = {
+			fieldName: alias,
+			selection: aggregatedItemFields,
+			childSelections: internalQuery._formatCollections || []
+		}
+
 		const aggregatedQuery = this._db
 			.select({
 				...keyColumns,
-				[alias]: jsonBuildArgs.length > 0
-					? sql`COALESCE(json_agg(json_build_object(${sql.join(jsonBuildArgs, sql`, `)})), '[]'::json)`.as(aggregationAlias)
-					: sql`'[]'::json`.as(aggregationAlias)
+				[alias]: aggregationColumn
 			})
 			.from(subquery)
 			.groupBy(...Object.values(keyColumns) as any[])
@@ -151,6 +170,32 @@ export class DbCteBuilder {
 		// Create the CTE
 		const newCte = this._db.$with(name).as(aggregatedQuery)
 		this._ctes.push(newCte)
+
+		// IMPORTANT: Attach format metadata to the CTE's selected fields
+		// The metadata was already attached to aggregationColumn, but we need to ensure
+		// it's also available on the CTE's selectedFields for when it's used in joins
+		const cteSelectedFields = (newCte as any)._?.selectedFields;
+		if (cteSelectedFields) {
+			// Find the items field and attach the metadata
+			const itemsField = cteSelectedFields[alias];
+			if (itemsField) {
+				// The field might be a SQL.Aliased object, attach metadata to it
+				itemsField.eftifyFormatColumn = {
+					fieldName: alias,
+					selection: aggregatedItemFields,
+					childSelections: internalQuery._formatCollections || []
+				};
+
+				// Also attach to the SQL object if it exists
+				if ((itemsField as any).sql) {
+					(itemsField as any).sql.eftifyFormatColumn = {
+						fieldName: alias,
+						selection: aggregatedItemFields,
+						childSelections: internalQuery._formatCollections || []
+					};
+				}
+			}
+		}
 
 		return new DbCte<TKey & { [K in TAlias]: Array<AggregatedItemType<TSelection, TKey>> }>(this._db, newCte)
 	}

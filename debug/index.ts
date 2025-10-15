@@ -229,6 +229,7 @@ const drizzleEftified = drizzleEftify.create(queryConnection, {
 				.where(p => lt(p.id, 100))
 				.select(p => ({
 					userId: p.id,
+					createdAt: p.createdAt,
 					customPostCount: p.customPosts.select(cp => ({ id: cp.id })).count().as('customPostCount')
 				}))
 		);
@@ -244,6 +245,7 @@ const drizzleEftified = drizzleEftify.create(queryConnection, {
 				(user, cte) => ({
 					id: user.id,
 					name: user.name,
+					createdAt: cte.createdAt,
 					crash: user.userAddress.address,
 					customCount: cte.customPostCount  // Access CTE column!
 				})
@@ -259,6 +261,7 @@ const drizzleEftified = drizzleEftify.create(queryConnection, {
 				id: p.id,
 				userId: p.userId,
 				street: p.address,
+				createdAt: p.user.createdAt,
 			})),
 			p => ({ userId: p.userId }),
 			'items'
