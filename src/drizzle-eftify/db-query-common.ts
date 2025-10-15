@@ -302,77 +302,87 @@ export class DbQueryCommon {
 	}
 
 	static mapCollectionValuesFromDriver(formatCollections: any[], result: any[], decoderCache?: Map<string, any>, keyPrefix?: string) {
-		if (formatCollections?.length > 0) {
-			if (decoderCache == null) {
-				decoderCache = new Map<string, any>();
-			}
+		if (!formatCollections?.length || !result?.length) {
+			return;
+		}
 
-			if (keyPrefix == null) {
-				keyPrefix = '';
-			}
+		decoderCache = decoderCache ?? new Map<string, any>();
+		keyPrefix = keyPrefix ?? '';
 
-			for (const item of result) {
-				for (const formatField of formatCollections) {
-					let collectionField = item[formatField.fieldName];
-					if (collectionField == null) {
-						item[formatField.fieldName] = [];
-						collectionField = item[formatField.fieldName]
+		// Pre-build decoder map for each formatField to avoid repeated lookups
+		const formatFieldDecoders = new Map<any, Map<string, ((val: any) => any) | null>>();
+
+		for (const formatField of formatCollections) {
+			const fieldDecoders = new Map<string, ((val: any) => any) | null>();
+			const selection = formatField.selection;
+
+			// Pre-resolve all possible decoders for this formatField
+			if (selection) {
+				for (const name in selection) {
+					const selectionField = selection[name];
+					let decoder: ((val: any) => any) | null = null;
+
+					if (selectionField?.mapFromDriverValue != null) {
+						decoder = (val: any) => selectionField.mapFromDriverValue.call(selectionField, val);
+					} else if (selectionField?._origCol?.mapFromDriverValue != null) {
+						decoder = (val: any) => selectionField._origCol.mapFromDriverValue.call(selectionField._origCol, val);
+					} else if (selectionField?.decoder?.mapFromDriverValue != null) {
+						decoder = selectionField.decoder.mapFromDriverValue;
+					} else if (selectionField?.sql?.decoder?.mapFromDriverValue != null) {
+						decoder = selectionField.sql.decoder.mapFromDriverValue;
 					}
 
-					const hasChildren = formatField.childSelections?.length > 0;
+					fieldDecoders.set(name, decoder);
+				}
+			}
 
-					for (const collectionItem of collectionField) {
-						if (hasChildren) {
-							const colItemArr = [collectionItem];
-							for (const childSelection of formatField.childSelections) {
-								DbQueryCommon.mapCollectionValuesFromDriver([childSelection], colItemArr, decoderCache, keyPrefix + '-' + formatField.fieldName + childSelection.fieldName);
-							}
+			formatFieldDecoders.set(formatField, fieldDecoders);
+		}
+
+		// Process items
+		const resultLen = result.length;
+		for (let i = 0; i < resultLen; i++) {
+			const item = result[i];
+
+			for (const formatField of formatCollections) {
+				const fieldName = formatField.fieldName;
+				let collectionField = item[fieldName];
+
+				if (collectionField == null) {
+					item[fieldName] = [];
+					continue;
+				}
+
+				// Process child selections first
+				const childSelections = formatField.childSelections;
+				if (childSelections?.length > 0) {
+					const childKeyPrefix = keyPrefix + '-' + fieldName;
+					for (const childSelection of childSelections) {
+						const fullChildKeyPrefix = childKeyPrefix + childSelection.fieldName;
+						DbQueryCommon.mapCollectionValuesFromDriver([childSelection], collectionField, decoderCache, fullChildKeyPrefix);
+					}
+				}
+
+				// Get pre-built decoder map for this formatField
+				const fieldDecoders = formatFieldDecoders.get(formatField);
+				if (!fieldDecoders) continue;
+
+				// Process all collection items
+				const collectionLen = collectionField.length;
+				for (let j = 0; j < collectionLen; j++) {
+					const collectionItem = collectionField[j];
+
+					// Process each field in the collection item
+					for (const name in collectionItem) {
+						const field = collectionItem[name];
+						if (field == null) {
+							continue;
 						}
 
-						for (let [name, field] of Object.entries(collectionItem)) {
-							if (field == null) {
-								continue;
-							}
-
-							let decoder = decoderCache.get(keyPrefix + formatField.fieldName + '-' + name);
-							if (decoder != null) {
-								collectionItem[name] = decoder(field);
-								continue;
-							}
-
-							const selectionField = formatField.selection[name];
-							if (selectionField?.mapFromDriverValue != null) {
-								// Bind the context to the column object for proper this binding
-								decoder = (val: any) => selectionField.mapFromDriverValue.call(selectionField, val);
-								decoderCache.set(keyPrefix + formatField.fieldName + '-' + name, decoder);
-								collectionItem[name] = decoder(field);
-								continue;
-							}
-
-							if (selectionField?._origCol?.mapFromDriverValue != null) {
-								decoder = (val: any) => selectionField._origCol.mapFromDriverValue.call(selectionField._origCol, val);
-								decoderCache.set(keyPrefix + formatField.fieldName + '-' + name, decoder);
-								collectionItem[name] = decoder(field);
-								continue;
-							}
-
-							if (selectionField?.decoder != null) {
-								decoder = selectionField.decoder.mapFromDriverValue;
-								if (decoder != null) {
-									decoderCache.set(keyPrefix + formatField.fieldName + '-' + name, decoder);
-									collectionItem[name] = decoder(field);
-									continue;
-								}
-							}
-
-							if (selectionField?.sql?.decoder != null) {
-								decoder = selectionField.sql.decoder.mapFromDriverValue;
-								if (decoder != null) {
-									decoderCache.set(keyPrefix + formatField.fieldName + '-' + name, decoder);
-									collectionItem[name] = decoder(field);
-									continue;
-								}
-							}
+						// Get decoder from pre-built map
+						const decoder = fieldDecoders.get(name);
+						if (decoder !== undefined && decoder !== null) {
+							collectionItem[name] = decoder(field);
 						}
 					}
 				}
