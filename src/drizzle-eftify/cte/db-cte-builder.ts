@@ -1,4 +1,4 @@
-import { SelectedFields, WithSubquery, sql } from 'drizzle-orm'
+import { SelectedFields, WithSubquery, sql, SQL, is } from 'drizzle-orm'
 import { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import { DbQueryable } from '../queryable/db-queryable'
 
@@ -125,14 +125,34 @@ export class DbCteBuilder {
 		const keyColumns = keySelector(subquery)
 
 		// Build the list of all columns to exclude from aggregation (the key columns)
-		const keyNames = new Set(Object.keys(keyColumns))
+		// Handle SQL.Aliased columns by extracting their alias names
+		const keyNames = new Set<string>()
+		for (const [keyName, keyValue] of Object.entries(keyColumns)) {
+			// Check if this is a SQL.Aliased object
+			if (is(keyValue, SQL.Aliased)) {
+				// For SQL.Aliased objects, use the alias name instead of the key name
+				// This prevents ambiguity when the CTE is joined with other tables
+				keyNames.add((keyValue as any).fieldAlias)
+			} else {
+				// For regular columns, use the key name
+				keyNames.add(keyName)
+			}
+		}
 
 		// Build json_build_object arguments for non-key columns
 		const jsonBuildArgs: any[] = []
 		for (const colName in selectedFields) {
 			if (!keyNames.has(colName)) {
 				const column = subquery[colName]
-				jsonBuildArgs.push(sql`${sql.raw(`'${colName}'`)}`)
+				const field = selectedFields[colName]
+
+				// Check if this field is a SQL.Aliased object to get the correct alias name
+				let fieldName = colName
+				if (is(field, SQL.Aliased)) {
+					fieldName = (field as any).fieldAlias
+				}
+
+				jsonBuildArgs.push(sql`${sql.raw(`'${fieldName}'`)}`)
 				jsonBuildArgs.push(column)
 			}
 		}
@@ -147,7 +167,15 @@ export class DbCteBuilder {
 		const aggregatedItemFields: any = {}
 		for (const colName in selectedFields) {
 			if (!keyNames.has(colName)) {
-				aggregatedItemFields[colName] = selectedFields[colName]
+				const field = selectedFields[colName]
+
+				// Use the field alias if it's a SQL.Aliased object, otherwise use colName
+				let fieldName = colName
+				if (is(field, SQL.Aliased)) {
+					fieldName = (field as any).fieldAlias
+				}
+
+				aggregatedItemFields[fieldName] = field
 			}
 		}
 

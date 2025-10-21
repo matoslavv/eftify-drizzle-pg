@@ -545,6 +545,37 @@ const drizzleEftified = drizzleEftify.create(queryConnection, {
 
 		console.log('Inner join DbSet result (first 3):', innerJoinDbSetResult.slice(0, 3));
 
+		// TEST: withAggregation with sql.as() aliasing
+		// This tests that aliased columns work correctly in withAggregation
+		const aliasTestBuilder = new DbCteBuilder(dbContext.db);
+		const aliasedAggregationCte = aliasTestBuilder.withAggregation(
+			'aliased_aggregation_test',
+			dbContext.userAddress.select(p => ({
+				id: sql`${p.id}`.as('addressId'),  // Aliased column in non-key
+				userId: p.userId,
+				street: sql`${p.address}`.as('streetName'),  // Another aliased column
+				createdAt: p.user.createdAt,
+			})),
+			p => ({ uidAlias: sql`${p.userId}`.as('uidAlias'), }),  // userId is the key
+			'addresses'
+		);
+
+		const aliasedAggregationResult = await dbContext.users
+			.where(p => eq(p.id, 1))
+			.with(...aliasTestBuilder.getCtes())
+			.leftJoin(
+				aliasedAggregationCte,
+				(user, cte) => eq(user.id, cte.uidAlias),
+				(user, cte) => ({
+					userId: user.id,
+					userName: user.name,
+					addressesData: cte.addresses  // Should have {addressId, streetName, createdAt}
+				})
+			)
+			.toList();
+
+		console.log('Aliased aggregation test result:', JSON.stringify(aliasedAggregationResult, null, 2));
+
 	} catch (error) {
 		const pica = error;
 		console.error('Error:', error);
