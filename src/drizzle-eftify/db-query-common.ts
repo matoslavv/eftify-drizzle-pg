@@ -5,6 +5,69 @@ import DbEftifyConfig from './db-eftify-config';
 import { EftifyCollectionJoinDeclaration } from './data-contracts';
 
 export class DbQueryCommon {
+	/**
+	 * Checks if the fields object contains any nested proxy structures that need flattening.
+	 * Returns true if flattening is needed, false if the user has already manually selected columns.
+	 */
+	static needsFlattening(fields: any): boolean {
+		for (let [key, value] of Object.entries(fields)) {
+			if (value && typeof value === 'object') {
+				const hasSubqueryStructure = (value as any)._ && ((value as any)._.sql || (value as any)._.selectedFields);
+				if (hasSubqueryStructure) {
+					return true;
+				}
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * Flattens nested proxy objects (from leftJoin selectors) into a flat structure of column references.
+	 * This prevents Drizzle's orderSelectedFields from hitting stack overflows on circular references.
+	 * Only use this when the user passes whole proxy objects like { user, cte }.
+	 */
+	static flattenProxyStructure(fields: any): any {
+		const flattened: any = {};
+
+		for (let [key, value] of Object.entries(fields)) {
+			if (value && typeof value === 'object') {
+				// Check if this is a proxy object containing column references
+				const hasSubqueryStructure = (value as any)._ && ((value as any)._.sql || (value as any)._.selectedFields);
+
+				if (hasSubqueryStructure) {
+					// This is a CTE/subquery proxy - extract its columns with prefixed keys
+					const selectedFields = (value as any)._.selectedFields || {};
+					for (let [colName, colValue] of Object.entries(selectedFields)) {
+						// Use a prefixed key to avoid collisions: user_id, cte_userId, etc.
+						const flatKey = `${key}_${colName}`;
+						// Alias the column to match the flat key for unambiguous selection
+						if (is(colValue, Column)) {
+							flattened[flatKey] = sql`${colValue}`.as(flatKey);
+						} else if (is(colValue, SQL.Aliased)) {
+							// Already aliased, but we need to re-alias with our prefix
+							flattened[flatKey] = sql`${colValue}`.as(flatKey);
+						} else {
+							flattened[flatKey] = colValue;
+						}
+					}
+				} else if (is(value, Column) || is(value, SQL) || is(value, SQL.Aliased)) {
+					// This is already a column reference, keep it as-is
+					flattened[key] = value;
+				} else {
+					// This is a plain object, recurse
+					const nested = DbQueryCommon.flattenProxyStructure({ [key]: value });
+					for (let [nestedKey, nestedValue] of Object.entries(nested)) {
+						flattened[nestedKey] = nestedValue;
+					}
+				}
+			} else {
+				flattened[key] = value;
+			}
+		}
+
+		return flattened;
+	}
+
 	static ensureColumnAliased(fields: any, fixColumnNames: boolean, relationArr: DbQueryRelation[], opData?: { count: number; names: { [index: string]: boolean } }) {
 		opData = opData || { count: 0, names: {} }
 
@@ -87,7 +150,16 @@ export class DbQueryCommon {
 				)
 			} else if (!field) {
 				delete fields[name]
-			} else {
+			} else if (typeof field === 'object' && field !== null) {
+				// Check if this is a subquery/CTE proxy object (has _ property with special structure)
+				// These should not be recursively expanded as they're already processed
+				const hasSubqueryStructure = (field as any)._ && ((field as any)._.sql || (field as any)._.selectedFields);
+				if (hasSubqueryStructure) {
+					// This is a CTE or subquery proxy - keep it as is, don't recurse
+					continue;
+				}
+
+				// Otherwise, recurse into the object
 				DbQueryCommon.ensureColumnAliased(field, fixColumnNames, relationArr, opData)
 			}
 		}
@@ -230,71 +302,87 @@ export class DbQueryCommon {
 	}
 
 	static mapCollectionValuesFromDriver(formatCollections: any[], result: any[], decoderCache?: Map<string, any>, keyPrefix?: string) {
-		if (formatCollections?.length > 0) {
-			if (decoderCache == null) {
-				decoderCache = new Map<string, any>();
+		if (!formatCollections?.length || !result?.length) {
+			return;
+		}
+
+		decoderCache = decoderCache ?? new Map<string, any>();
+		keyPrefix = keyPrefix ?? '';
+
+		// Pre-build decoder map for each formatField to avoid repeated lookups
+		const formatFieldDecoders = new Map<any, Map<string, ((val: any) => any) | null>>();
+
+		for (const formatField of formatCollections) {
+			const fieldDecoders = new Map<string, ((val: any) => any) | null>();
+			const selection = formatField.selection;
+
+			// Pre-resolve all possible decoders for this formatField
+			if (selection) {
+				for (const name in selection) {
+					const selectionField = selection[name];
+					let decoder: ((val: any) => any) | null = null;
+
+					if (selectionField?.mapFromDriverValue != null) {
+						decoder = (val: any) => selectionField.mapFromDriverValue.call(selectionField, val);
+					} else if (selectionField?._origCol?.mapFromDriverValue != null) {
+						decoder = (val: any) => selectionField._origCol.mapFromDriverValue.call(selectionField._origCol, val);
+					} else if (selectionField?.decoder?.mapFromDriverValue != null) {
+						decoder = selectionField.decoder.mapFromDriverValue;
+					} else if (selectionField?.sql?.decoder?.mapFromDriverValue != null) {
+						decoder = selectionField.sql.decoder.mapFromDriverValue;
+					}
+
+					fieldDecoders.set(name, decoder);
+				}
 			}
 
-			if (keyPrefix == null) {
-				keyPrefix = '';
-			}
+			formatFieldDecoders.set(formatField, fieldDecoders);
+		}
 
-			for (const item of result) {
-				for (const formatField of formatCollections) {
-					const collectionField = item[formatField.fieldName];
-					const hasChildren = formatField.childSelections?.length > 0;
+		// Process items
+		const resultLen = result.length;
+		for (let i = 0; i < resultLen; i++) {
+			const item = result[i];
 
-					for (const collectionItem of collectionField) {
-						if (hasChildren) {
-							const colItemArr = [collectionItem];
-							for (const childSelection of formatField.childSelections) {
-								DbQueryCommon.mapCollectionValuesFromDriver([childSelection], colItemArr, decoderCache, keyPrefix + '-' + formatField.fieldName + childSelection.fieldName);
-							}
+			for (const formatField of formatCollections) {
+				const fieldName = formatField.fieldName;
+				let collectionField = item[fieldName];
+
+				if (collectionField == null) {
+					item[fieldName] = [];
+					continue;
+				}
+
+				// Process child selections first
+				const childSelections = formatField.childSelections;
+				if (childSelections?.length > 0) {
+					const childKeyPrefix = keyPrefix + '-' + fieldName;
+					for (const childSelection of childSelections) {
+						const fullChildKeyPrefix = childKeyPrefix + childSelection.fieldName;
+						DbQueryCommon.mapCollectionValuesFromDriver([childSelection], collectionField, decoderCache, fullChildKeyPrefix);
+					}
+				}
+
+				// Get pre-built decoder map for this formatField
+				const fieldDecoders = formatFieldDecoders.get(formatField);
+				if (!fieldDecoders) continue;
+
+				// Process all collection items
+				const collectionLen = collectionField.length;
+				for (let j = 0; j < collectionLen; j++) {
+					const collectionItem = collectionField[j];
+
+					// Process each field in the collection item
+					for (const name in collectionItem) {
+						const field = collectionItem[name];
+						if (field == null) {
+							continue;
 						}
 
-						for (let [name, field] of Object.entries(collectionItem)) {
-							if (field == null) {
-								continue;
-							}
-
-							let decoder = decoderCache.get(keyPrefix + formatField.fieldName + '-' + name);
-							if (decoder != null) {
-								collectionItem[name] = decoder(field);
-								continue;
-							}
-
-							const selectionField = formatField.selection[name];
-							decoder = selectionField?.mapFromDriverValue;
-							if (decoder != null) {
-								decoderCache.set(keyPrefix + formatField.fieldName + '-' + name, decoder);
-								collectionItem[name] = decoder(field);
-								continue;
-							}
-
-							if (selectionField?._origCol?.mapFromDriverValue != null) {
-								decoder = (val: any) => selectionField._origCol.mapFromDriverValue.call(selectionField._origCol, val);
-								decoderCache.set(keyPrefix + formatField.fieldName + '-' + name, decoder);
-								collectionItem[name] = decoder(field);
-								continue;
-							}
-
-							if (selectionField?.decoder != null) {
-								decoder = selectionField.decoder.mapFromDriverValue;
-								if (decoder != null) {
-									decoderCache.set(keyPrefix + formatField.fieldName + '-' + name, decoder);
-									collectionItem[name] = decoder(field);
-									continue;
-								}
-							}
-
-							if (selectionField?.sql?.decoder != null) {
-								decoder = selectionField.sql.decoder.mapFromDriverValue;
-								if (decoder != null) {
-									decoderCache.set(keyPrefix + formatField.fieldName + '-' + name, decoder);
-									collectionItem[name] = decoder(field);
-									continue;
-								}
-							}
+						// Get decoder from pre-built map
+						const decoder = fieldDecoders.get(name);
+						if (decoder !== undefined && decoder !== null) {
+							collectionItem[name] = decoder(field);
 						}
 					}
 				}

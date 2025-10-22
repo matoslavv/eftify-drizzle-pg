@@ -7,6 +7,7 @@ import {
 	SelectedFields,
 	Table,
 	ValueOrArray,
+	WithSubquery,
 	and,
 	sql
 } from 'drizzle-orm'
@@ -18,6 +19,7 @@ import { DbQueryCommon } from './db-query-common'
 import { DbQueryRelation } from './db-query-relation'
 import { DbQueryable } from './queryable/db-queryable'
 import { PgColumn } from 'drizzle-orm/pg-core'
+import { DbCte } from './cte/db-cte-builder'
 
 export type EftifyUpdateModel<TTable extends Table, TConfig extends {
 	dbColumnNames: boolean;
@@ -146,6 +148,245 @@ export class DbSet<TDataModel extends any, TTable extends AnyPgTable, TEntity ex
 
 		DbQueryCommon.setFormatColumnsOnBaseQuery(this, select, columns);
 		return new DbQueryable(db, select, 1)
+	}
+
+	/**
+	 * Add CTEs to queries on this DbSet. CTEs can be referenced in subsequent operations.
+	 * @param ctes Array of CTE definitions from DbCteBuilder
+	 */
+	with(...ctes: WithSubquery<any, any>[]): this {
+		// Store CTEs to be applied to queries
+		(this as any)._pendingCtes = ctes
+		return this
+	}
+
+	/**
+	 * Perform a left join with a DbCte (strongly typed), returning a combined queryable.
+	 * This overload preserves the full type information from DbCte.
+	 */
+	leftJoin<TCteSelection extends SelectedFields<any, any>, TResult extends SelectedFields<any, any>>(
+		dbCte: DbCte<TCteSelection>,
+		on: (table: TEntity, cte: TCteSelection) => SQL | undefined,
+		selector: (table: TEntity, cte: TCteSelection) => TResult
+	): DbQueryable<TResult>
+
+	/**
+	 * Perform a left join with a CTE, returning a combined queryable.
+	 */
+	leftJoin<TCteSelection extends SelectedFields<any, any>, TResult extends SelectedFields<any, any>>(
+		cte: WithSubquery<any, any>,
+		on: (table: TEntity, cte: TCteSelection) => SQL | undefined,
+		selector: (table: TEntity, cte: TCteSelection) => TResult
+	): DbQueryable<TResult>
+
+	/**
+	 * Perform a left join with a DbQueryable, returning a combined queryable.
+	 */
+	leftJoin<TCteSelection extends SelectedFields<any, any>, TResult extends SelectedFields<any, any>>(
+		queryable: DbQueryable<TCteSelection>,
+		on: (table: TEntity, cte: TCteSelection) => SQL | undefined,
+		selector: (table: TEntity, cte: TCteSelection) => TResult
+	): DbQueryable<TResult>
+
+	/**
+	 * Perform a left join with a DbSet, returning a combined queryable.
+	 * This preserves the strong typing of the DbSet entity.
+	 *
+	 * @example
+	 * const activePosts = dbContext.posts.where(p => eq(p.status, 'active'));
+	 * const result = await dbContext.users
+	 *   .leftJoin(
+	 *     activePosts,
+	 *     (user, post) => eq(user.id, post.authorId),  // post is fully typed!
+	 *     (user, post) => ({ userId: user.id, postId: post.id })
+	 *   )
+	 *   .toList();
+	 */
+	leftJoin<TJoinEntity extends DbEntity<any, any>, TResult extends SelectedFields<any, any>>(
+		dbSet: DbSet<any, any, TJoinEntity>,
+		on: (table: TEntity, joinEntity: TJoinEntity) => SQL | undefined,
+		selector: (table: TEntity, joinEntity: TJoinEntity) => TResult
+	): DbQueryable<TResult>
+
+	leftJoin<TCteSelection extends SelectedFields<any, any>, TResult extends SelectedFields<any, any>>(
+		cteOrQueryableOrSet: DbCte<TCteSelection> | WithSubquery<any, any> | DbQueryable<TCteSelection> | DbSet<any, any, any>,
+		on: (table: TEntity, cte: TCteSelection) => SQL | undefined,
+		selector: (table: TEntity, cte: TCteSelection) => TResult
+	): DbQueryable<TResult> {
+		return this._performJoin('left', cteOrQueryableOrSet, on, selector)
+	}
+
+	/**
+	 * Perform an inner join with a DbCte (strongly typed), returning a combined queryable.
+	 * This overload preserves the full type information from DbCte.
+	 */
+	innerJoin<TCteSelection extends SelectedFields<any, any>, TResult extends SelectedFields<any, any>>(
+		dbCte: DbCte<TCteSelection>,
+		on: (table: TEntity, cte: TCteSelection) => SQL | undefined,
+		selector: (table: TEntity, cte: TCteSelection) => TResult
+	): DbQueryable<TResult>
+
+	/**
+	 * Perform an inner join with a CTE, returning a combined queryable.
+	 */
+	innerJoin<TCteSelection extends SelectedFields<any, any>, TResult extends SelectedFields<any, any>>(
+		cte: WithSubquery<any, any>,
+		on: (table: TEntity, cte: TCteSelection) => SQL | undefined,
+		selector: (table: TEntity, cte: TCteSelection) => TResult
+	): DbQueryable<TResult>
+
+	/**
+	 * Perform an inner join with a DbQueryable, returning a combined queryable.
+	 */
+	innerJoin<TCteSelection extends SelectedFields<any, any>, TResult extends SelectedFields<any, any>>(
+		queryable: DbQueryable<TCteSelection>,
+		on: (table: TEntity, cte: TCteSelection) => SQL | undefined,
+		selector: (table: TEntity, cte: TCteSelection) => TResult
+	): DbQueryable<TResult>
+
+	/**
+	 * Perform an inner join with a DbSet, returning a combined queryable.
+	 * This preserves the strong typing of the DbSet entity.
+	 *
+	 * @example
+	 * const activePosts = dbContext.posts.where(p => eq(p.status, 'active'));
+	 * const result = await dbContext.users
+	 *   .innerJoin(
+	 *     activePosts,
+	 *     (user, post) => eq(user.id, post.authorId),  // post is fully typed!
+	 *     (user, post) => ({ userId: user.id, postId: post.id })
+	 *   )
+	 *   .toList();
+	 */
+	innerJoin<TJoinEntity extends DbEntity<any, any>, TResult extends SelectedFields<any, any>>(
+		dbSet: DbSet<any, any, TJoinEntity>,
+		on: (table: TEntity, joinEntity: TJoinEntity) => SQL | undefined,
+		selector: (table: TEntity, joinEntity: TJoinEntity) => TResult
+	): DbQueryable<TResult>
+
+	innerJoin<TCteSelection extends SelectedFields<any, any>, TResult extends SelectedFields<any, any>>(
+		cteOrQueryableOrSet: DbCte<TCteSelection> | WithSubquery<any, any> | DbQueryable<TCteSelection> | DbSet<any, any, any>,
+		on: (table: TEntity, cte: TCteSelection) => SQL | undefined,
+		selector: (table: TEntity, cte: TCteSelection) => TResult
+	): DbQueryable<TResult> {
+		return this._performJoin('inner', cteOrQueryableOrSet, on, selector)
+	}
+
+	/**
+	 * Shared implementation for both left and inner joins
+	 */
+	private _performJoin<TCteSelection extends SelectedFields<any, any>, TResult extends SelectedFields<any, any>>(
+		joinType: 'left' | 'inner',
+		cteOrQueryableOrSet: DbCte<TCteSelection> | WithSubquery<any, any> | DbQueryable<TCteSelection> | DbSet<any, any, any>,
+		on: (table: TEntity, cte: TCteSelection) => SQL | undefined,
+		selector: (table: TEntity, cte: TCteSelection) => TResult
+	): DbQueryable<TResult> {
+		const db = this.db
+		const pendingCtes = (this as any)._pendingCtes || []
+
+		// Convert DbQueryable, DbSet, or DbCte to a CTE if needed
+		let cte: WithSubquery<any, any>
+		let additionalCtes: WithSubquery<any, any>[] = []
+
+		if (cteOrQueryableOrSet instanceof DbCte) {
+			// It's a DbCte - extract the underlying WithSubquery
+			cte = cteOrQueryableOrSet.cte
+		} else if (cteOrQueryableOrSet instanceof DbSet) {
+			// It's a DbSet - convert it to a query first, then to a CTE
+			// This preserves any where/orderBy conditions on the DbSet
+			const dbSetQuery = (cteOrQueryableOrSet as any).createEmptyQuery()
+			const queryableName = `dbset_${Date.now()}`
+			cte = db.$with(queryableName).as(dbSetQuery)
+			additionalCtes.push(cte)
+		} else if (cteOrQueryableOrSet instanceof DbQueryable) {
+			// It's a DbQueryable - convert it to a CTE
+			const queryableName = `subquery_${Date.now()}`
+			cte = db.$with(queryableName).as(cteOrQueryableOrSet.toDrizzleQuery())
+			additionalCtes.push(cte)
+		} else {
+			// It's already a WithSubquery (CTE)
+			cte = cteOrQueryableOrSet
+		}
+
+		// Apply CTEs at database level
+		let dbWithCtes: any = db
+		const allCtes = [...pendingCtes, ...additionalCtes]
+		if (allCtes.length > 0) {
+			dbWithCtes = db.with(...allCtes)
+		}
+
+		// Capture pending conditions before they're cleared
+		const whereCondition = this._pendingWhere
+		const orderByCondition = this._pendingOrderBy
+
+		// Clear pending conditions
+		this._pendingWhere = null
+		this._pendingOrderBy = null
+
+		// Track navigation properties (like user.userAddress.address)
+		const relationArr: DbQueryRelation[] = []
+		this._entity.subscribeNavigation((args) => {
+			relationArr.push(args.navigation)
+		})
+
+		// Get the join condition
+		const joinCondition = on(this._entity, cte as any)
+
+		// Get the combined columns
+		const columns = selector(this._entity, cte as any)
+
+		// Unsubscribe from navigation tracking
+		this._entity.unsubscribeNavigation()
+
+		// Only flatten if the user passed nested proxy objects (not individual column selections)
+		const needsFlattening = DbQueryCommon.needsFlattening(columns)
+		const finalColumns = needsFlattening ? DbQueryCommon.flattenProxyStructure(columns) : columns
+		DbQueryCommon.ensureColumnAliased(finalColumns, false, relationArr)
+
+		// Build the complete query: select combined columns from table joined with CTE
+		let finalQuery = dbWithCtes.select(finalColumns).from(this._entity.table as any)
+
+		// Apply the join (left or inner based on joinType)
+		if (joinType === 'left') {
+			finalQuery = finalQuery.leftJoin(cte, joinCondition)
+		} else {
+			finalQuery = finalQuery.innerJoin(cte, joinCondition)
+		}
+
+		// Build navigation relations (joins for foreign keys)
+		try {
+			finalQuery = DbQueryCommon.buildRelations(finalQuery, relationArr)
+		} catch (error) {
+			// Might have been built in previous step
+		}
+
+		// Apply where condition if present
+		if (whereCondition != null) {
+			finalQuery = finalQuery.where(whereCondition)
+		}
+
+		// Apply orderBy if present
+		if (orderByCondition != null) {
+			finalQuery = finalQuery.orderBy(orderByCondition)
+		}
+
+		DbQueryCommon.setFormatColumnsOnBaseQuery(this, finalQuery, finalColumns)
+		return new DbQueryable(db, finalQuery, 1, allCtes)
+	}
+
+	/**
+	 * Perform a left join with a CTE or table, then select columns
+	 * @param cte The CTE to join
+	 * @param on The join condition
+	 * @param selector The columns to select from both the table and CTE
+	 * @deprecated Use leftJoin instead for better handling of ambiguous column names
+	 */
+	leftJoinSelect<TCteSelection extends SelectedFields<any, any>, TResult extends SelectedFields<any, any>>(
+		cte: WithSubquery<any, any>,
+		on: (table: TEntity, cte: TCteSelection) => SQL | undefined,
+		selector: (table: TEntity, cte: TCteSelection) => TResult
+	): DbQueryable<TResult> {
+		return this.leftJoin(cte, on, selector)
 	}
 
 	async firstOrDefault(): Promise<InferSelectModel<TTable>> {

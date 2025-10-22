@@ -8,7 +8,7 @@ export const users = pgTable('users', {
     id: integer('id').primaryKey().generatedAlwaysAsIdentity({ name: 'users_id_seq' }),
     name: text('name'),
     createdAt: pgIntDatetime('created_at').notNull(),
-	state: integer('state').default(1)
+    state: integer('state').default(1)
 });
 
 export const usersRelations = eftifyRelations(users, ({ one, many, manyCustomDefined }) => ({
@@ -40,7 +40,7 @@ export const posts = pgTable('posts', {
     id: integer('id').primaryKey().generatedAlwaysAsIdentity({ name: 'posts_id_seq' }),
     content: text('content'),
     authorId: integer('author_id'),
-	unrelatedId: integer('unrelated_id'),
+    unrelatedId: integer('unrelated_id'),
     createdAt: pgIntDatetime('created_at').notNull()
 });
 export const postsRelations = relations(posts, ({ one, many }) => ({
@@ -49,10 +49,10 @@ export const postsRelations = relations(posts, ({ one, many }) => ({
         fields: [posts.authorId],
         references: [users.id],
     }),
-	unrelatedTable: one(unrelatedTable, {
-		fields: [posts.unrelatedId],
-		references: [unrelatedTable.id],
-	}),
+    unrelatedTable: one(unrelatedTable, {
+        fields: [posts.unrelatedId],
+        references: [unrelatedTable.id],
+    }),
 }));
 
 // ==================== POST COMMENTS ====================
