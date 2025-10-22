@@ -301,4 +301,50 @@ export class DbQueryCommon {
 			}
 		}
 	}
+
+	static processRelationsForUpdate(query: any, relations: DbQueryRelation[], value: any): any {
+		for (const relation of relations) {
+			if (!relation.relation || !relation.relation.normalizedRelation) {
+				throw new Error(`Invalid relation structure: ${JSON.stringify(relation)}`);
+			}
+
+			const selectedFields = relation.childEntity.table?._?.selectedFields;
+			if (!selectedFields) {
+				throw new Error(`Selected fields not found for child entity table.`);
+			}
+
+			const keyPairs = relation.relation.normalizedRelation.fields.map((field, index) => {
+				const referencedField = relation.relation.normalizedRelation.references[index];
+				if (!field || !referencedField) {
+					throw new Error(`Invalid field mapping in relation: ${JSON.stringify(relation)}`);
+				}
+
+				const matchingColumn = Object.values(selectedFields).find((col: any) => col.name == referencedField.name);
+				if (!matchingColumn) {
+					throw new Error(`Referenced column ${referencedField.name} not found in child entity table.`);
+				}
+
+				return [
+					relation.callingEntity.table[field.name],
+					matchingColumn
+				];
+			});
+
+			if (relation.childEntity?.table != null) {
+				const table = relation.childEntity.table;
+				const tableName = table?._?.usedTables?.[0];
+				const aliasTableName = table?._?.alias;
+
+				if (tableName && aliasTableName) {
+					query = query.from(sql`${sql.identifier(tableName)} AS ${sql.identifier(aliasTableName)}`);
+				}
+			}
+
+			for (const [parentField, childField] of keyPairs) {
+				query = query.where(eq(parentField, childField));
+			}
+		}
+
+		return query;
+	}
 }
