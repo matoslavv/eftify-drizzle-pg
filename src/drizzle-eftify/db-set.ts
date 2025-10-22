@@ -498,7 +498,7 @@ export class DbSet<TDataModel extends any, TTable extends AnyPgTable, TEntity ex
 		}
 
 		if (this._pendingRelations?.length > 0) {
-			throw 'Update with relations not supported'
+			query = DbQueryCommon.processRelationsForUpdate(query, this._pendingRelations, value);
 		}
 
 		this._pendingWhere = null

@@ -9,7 +9,7 @@ export class DbQueryCommon {
 	 * Checks if the fields object contains any nested proxy structures that need flattening.
 	 * Returns true if flattening is needed, false if the user has already manually selected columns.
 	 */
-	static needsFlattening(fields: any): boolean {
+	static needsFlattening (fields: any): boolean {
 		for (let [key, value] of Object.entries(fields)) {
 			if (value && typeof value === 'object') {
 				const hasSubqueryStructure = (value as any)._ && ((value as any)._.sql || (value as any)._.selectedFields);
@@ -26,7 +26,7 @@ export class DbQueryCommon {
 	 * This prevents Drizzle's orderSelectedFields from hitting stack overflows on circular references.
 	 * Only use this when the user passes whole proxy objects like { user, cte }.
 	 */
-	static flattenProxyStructure(fields: any): any {
+	static flattenProxyStructure (fields: any): any {
 		const flattened: any = {};
 
 		for (let [key, value] of Object.entries(fields)) {
@@ -68,7 +68,7 @@ export class DbQueryCommon {
 		return flattened;
 	}
 
-	static ensureColumnAliased(fields: any, fixColumnNames: boolean, relationArr: DbQueryRelation[], opData?: { count: number; names: { [index: string]: boolean } }) {
+	static ensureColumnAliased (fields: any, fixColumnNames: boolean, relationArr: DbQueryRelation[], opData?: { count: number; names: { [index: string]: boolean } }) {
 		opData = opData || { count: 0, names: {} }
 
 
@@ -165,7 +165,7 @@ export class DbQueryCommon {
 		}
 	}
 
-	static createJoinOn(relationItem: DbQueryRelation) {
+	static createJoinOn (relationItem: DbQueryRelation) {
 		const normalizedRelation = relationItem.relation.normalizedRelation;
 		if ((relationItem.relation as any)._keyPairs == null) {
 			(relationItem.relation as any)._keyPairs = [];
@@ -225,7 +225,7 @@ export class DbQueryCommon {
 		return joinOn;
 	}
 
-	static buildRelations<T>(select: T, relationArr: DbQueryRelation[]) {
+	static buildRelations<T> (select: T, relationArr: DbQueryRelation[]) {
 		if (relationArr.length == 0) {
 			return select
 		}
@@ -271,13 +271,13 @@ export class DbQueryCommon {
 	}
 
 	/** @internal */
-	static getTraceMessage(queryType: 'firstOrDefault' | 'toList'): string {
+	static getTraceMessage (queryType: 'firstOrDefault' | 'toList'): string {
 		return `Executing query ${queryType}, query ID: q${new Date().getTime()}`
 	}
 
 
 
-	static setFormatColumnsOnBaseQuery(instance: any, select: any, columns: any) {
+	static setFormatColumnsOnBaseQuery (instance: any, select: any, columns: any) {
 		const formatCollection = [];
 		for (let [name, field] of Object.entries(columns)) {
 			const eftifyCol = (field as any).eftifyFormatColumn ?? (field as any).sql?.eftifyFormatColumn;
@@ -293,7 +293,7 @@ export class DbQueryCommon {
 		(select as any)._formatCollections = formatCollection;
 	}
 
-	static restoreSubqueryFormatColumnsFromBaseQuery(baseQuery: any, subquery: any) {
+	static restoreSubqueryFormatColumnsFromBaseQuery (baseQuery: any, subquery: any) {
 		if (baseQuery._formatCollections?.length > 0) {
 			for (const formatter of baseQuery._formatCollections) {
 				subquery[formatter.fieldName].sql.eftifyFormatColumn = formatter;
@@ -301,7 +301,7 @@ export class DbQueryCommon {
 		}
 	}
 
-	static mapCollectionValuesFromDriver(formatCollections: any[], result: any[], decoderCache?: Map<string, any>, keyPrefix?: string) {
+	static mapCollectionValuesFromDriver (formatCollections: any[], result: any[], decoderCache?: Map<string, any>, keyPrefix?: string) {
 		if (!formatCollections?.length || !result?.length) {
 			return;
 		}
@@ -388,5 +388,58 @@ export class DbQueryCommon {
 				}
 			}
 		}
+	}
+
+	static processRelationsForUpdate (query: any, relations: DbQueryRelation[], value: any): any {
+		const findField = (table: any, columnName: string) => Object.values(table).find((col: any) => col.name == columnName);
+
+		for (const relation of relations) {
+			if (!relation.relation || !relation.relation.normalizedRelation) {
+				throw new Error(`Invalid relation structure: ${JSON.stringify(relation)}`);
+			}
+
+			const selectedFields = relation.childEntity.table?._?.selectedFields;
+			if (!selectedFields) {
+				throw new Error(`Selected fields not found for child entity table.`);
+			}
+
+			const keyPairs = relation.relation.normalizedRelation.fields.map((field, index) => {
+				const referencedField = relation.relation.normalizedRelation.references[index];
+				if (!field || !referencedField) {
+					throw new Error(`Invalid field mapping in relation: ${JSON.stringify(relation)}`);
+				}
+
+				const parentField = findField(relation.callingEntity.table, field.name);
+				if (!parentField) {
+					throw new Error(`Field ${field.name} not found in calling entity table.`);
+				}
+
+				const childField = findField(selectedFields, referencedField.name);
+				if (!childField) {
+					throw new Error(`Referenced column ${referencedField.name} not found in child entity table.`);
+				}
+
+				return [
+					parentField,
+					childField
+				];
+			});
+
+			if (relation.childEntity?.table != null) {
+				const table = relation.childEntity.table;
+				const tableName = table?._?.usedTables?.[0];
+				const aliasTableName = table?._?.alias;
+
+				if (tableName && aliasTableName) {
+					query = query.from(sql`${sql.identifier(tableName)} AS ${sql.identifier(aliasTableName)}`);
+				}
+			}
+
+			for (const [parentField, childField] of keyPairs) {
+				query = query.where(eq(parentField as any, childField));
+			}
+		}
+
+		return query;
 	}
 }

@@ -1,9 +1,8 @@
 import { describe, beforeAll, afterAll, it, expect, beforeEach } from "@jest/globals";
-import { drizzleEftify } from "../src/index";
+import { drizzleEftify, flagHas, flagHasAll, flagHasAny, flagHasNone } from "../src/index";
 import * as schema from '../debug/schema';
 import { desc, eq, and } from "drizzle-orm";
 import { UserStateFlags } from '../debug/index';
-import { flagHasNone, flagHasAll, flagHasAny, flagHas } from "../src/drizzle-eftify/filters/bitwise";
 const postgres = require('postgres');
 
 const getDb = () => {
@@ -14,7 +13,7 @@ const getDb = () => {
 
 	const queryConnection = postgres(dbUrl);
 	const eftify = drizzleEftify.create(queryConnection, {
-		logger: false,
+		logger: true,
 		schema: schema
 	})?.eftify;
 
@@ -559,7 +558,7 @@ describe('index test', () => {
 		expect(allFlagsUser?.state).toBe(UserStateFlags.Active | UserStateFlags.Verified | UserStateFlags.Slave);
 	});
 
-	it('finds users with specific flag using hasFlag', async () => {
+	it('finds users with specific flag using flagHas', async () => {
 		await db.users.insert([
 			{ name: 'Active User', createdAt: new Date(), state: UserStateFlags.Active },
 			{ name: 'Verified User', createdAt: new Date(), state: UserStateFlags.Verified },
@@ -585,7 +584,7 @@ describe('index test', () => {
 		expect(activeUsers.map(u => u.name).sort()).toEqual(['Active + Verified', 'Active User']);
 	});
 
-	it('finds users with ALL specified flags using hasAllFlags', async () => {
+	it('finds users with ALL specified flags using flagHasAll', async () => {
 		await db.users.insert([
 			{ name: 'Only Active', createdAt: new Date(), state: UserStateFlags.Active },
 			{ name: 'Only Verified', createdAt: new Date(), state: UserStateFlags.Verified },
@@ -609,7 +608,7 @@ describe('index test', () => {
 		expect(allThreeFlags[0].name).toBe('All Three');
 	});
 
-	it('finds users with ANY of specified flags using hasAnyFlag', async () => {
+	it('finds users with ANY of specified flags using flagHasAny', async () => {
 		await db.users.insert([
 			{ name: 'Only Active', createdAt: new Date(), state: UserStateFlags.Active },
 			{ name: 'Only Verified', createdAt: new Date(), state: UserStateFlags.Verified },
@@ -633,7 +632,7 @@ describe('index test', () => {
 		expect(verifiedOrBannedUsers.map(u => u.name).sort()).toEqual(['Only Banned', 'Only Verified']);
 	});
 
-	it('finds users WITHOUT specific flag using doesNotHaveFlag', async () => {
+	it('finds users WITHOUT specific flag using flagHasNone', async () => {
 		await db.users.insert([
 			{ name: 'Good User', createdAt: new Date(), state: UserStateFlags.Active | UserStateFlags.Verified },
 			{ name: 'Verified User', createdAt: new Date(), state: UserStateFlags.Verified },
@@ -735,5 +734,30 @@ describe('index test', () => {
 
 		const allFlagUser = allFlagUsers.find(u => u.name === 'All Flags');
 		expect(allFlagUser).toBeDefined();
+	});
+
+	it('updates user name based on related address', async () => {
+		const [userRow] = await db.users.insert({
+			name: 'User to Update',
+			createdAt: new Date(),
+		}).returning({
+			id: schema.users.id
+		});
+
+		const [addressRow] = await db.userAddress.insert({
+			userId: userRow.id,
+			address: 'Test Address',
+		}).returning();
+
+		console.log(userRow, addressRow);
+
+
+		await db.users.where(p => eq(p.userAddress.address, 'Test Address')).update({
+			name: 'Updated User'
+		});
+
+		const updatedUser = await db.users.where(user => eq(user.id, userRow.id)).firstOrDefault();
+		expect(updatedUser).toBeDefined();
+		expect(updatedUser?.name).toBe('Updated User');
 	});
 });
